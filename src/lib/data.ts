@@ -1,0 +1,157 @@
+export type PlanId = "free" | "lite" | "starter" | "pro" | "elite" | "prime";
+
+export interface Plan {
+  id: PlanId;
+  name: string;
+  price: number;
+  commission: number; // affiliate commission when a referral activates this plan
+  perVoice: number;
+  perWord: number;
+  perPost: number;
+  perTask: number;
+  tagline: string;
+  popular?: boolean;
+}
+
+export const PLANS: Plan[] = [
+  {
+    id: "lite",
+    name: "Voice Lite",
+    price: 1500,
+    commission: 800,
+    perVoice: 100,
+    perWord: 60,
+    perPost: 50,
+    perTask: 30,
+    tagline: "Dip your toes in and start earning.",
+  },
+  {
+    id: "starter",
+    name: "Voice Starter",
+    price: 3000,
+    commission: 1800,
+    perVoice: 220,
+    perWord: 140,
+    perPost: 110,
+    perTask: 60,
+    tagline: "A solid step up for daily earners.",
+  },
+  {
+    id: "pro",
+    name: "Voice Pro",
+    price: 5000,
+    commission: 3000,
+    perVoice: 380,
+    perWord: 240,
+    perPost: 180,
+    perTask: 100,
+    tagline: "For creators who show up every day.",
+    popular: true,
+  },
+  {
+    id: "elite",
+    name: "Audio Elite",
+    price: 9500,
+    commission: 6000,
+    perVoice: 480,
+    perWord: 320,
+    perPost: 210,
+    perTask: 130,
+    tagline: "Premium rates, faster payouts.",
+  },
+  {
+    id: "prime",
+    name: "Prime Artiste",
+    price: 15000,
+    commission: 10000,
+    perVoice: 600,
+    perWord: 400,
+    perPost: 250,
+    perTask: 150,
+    tagline: "The highest earning tier. Pay once, earn forever.",
+  },
+];
+
+export const FREE_PLAN: Plan = {
+  id: "free",
+  name: "Free",
+  price: 0,
+  commission: 0,
+  perVoice: 0,
+  perWord: 0,
+  perPost: 0,
+  perTask: 0,
+  tagline: "Activate a plan to start earning.",
+};
+
+export function planById(id: PlanId): Plan {
+  return PLANS.find((p) => p.id === id) ?? FREE_PLAN;
+}
+
+export const WITHDRAW_MIN = 45000;
+
+export const VOICE_SENTENCES: string[] = [
+  "The quick brown fox jumps over the lazy dog.",
+  "Every voice you lend today builds the wealth of tomorrow.",
+  "Nigeria is home to over two hundred million dreamers.",
+  "Speak clearly, earn boldly, and share your success.",
+  "Innovation begins the moment you decide to try.",
+  "Consistency is the quiet engine behind every great result.",
+  "Your words carry value far beyond the sound.",
+  "Small daily wins compound into life-changing rewards.",
+];
+
+export const WORD_GAME_WORDS: string[] = [
+  "Entrepreneurship",
+  "Onomatopoeia",
+  "Serendipity",
+  "Extraordinary",
+  "Responsibility",
+  "Sophisticated",
+  "Congratulations",
+  "Pronunciation",
+  "Accomplishment",
+  "Determination",
+];
+
+export interface DailyTask {
+  id: string;
+  title: string;
+  detail: string;
+  category: "social" | "survey" | "watch" | "review";
+}
+
+export const DAILY_TASKS: DailyTask[] = [
+  { id: "t1", title: "Follow Voicearn on Instagram", detail: "Tap follow and confirm your handle.", category: "social" },
+  { id: "t2", title: "Watch a 30s promo video", detail: "Watch the full clip to unlock the reward.", category: "watch" },
+  { id: "t3", title: "Rate our app 5 stars", detail: "Leave an honest review on the store.", category: "review" },
+  { id: "t4", title: "Take a 2-minute survey", detail: "Tell us how you like to earn online.", category: "survey" },
+  { id: "t5", title: "Join our Telegram channel", detail: "Stay updated with new earning drops.", category: "social" },
+  { id: "t6", title: "Share the daily quote", detail: "Post today's motivation to your story.", category: "social" },
+  { id: "t7", title: "Retweet the pinned post", detail: "Amplify Voicearn to your followers.", category: "social" },
+  { id: "t8", title: "Watch: How payouts work", detail: "Learn how withdrawals are processed.", category: "watch" },
+];
+
+export interface SponsoredPost {
+  id: string;
+  headline: string;
+  platform: "WhatsApp" | "Facebook" | "X" | "Instagram" | "TikTok";
+  copy: string;
+}
+
+export const SPONSORED_POSTS: SponsoredPost[] = [
+  { id: "s1", headline: "VOICEARN IS PAYING", platform: "WhatsApp", copy: "I just got paid on Voicearn for reading sentences aloud. Join with my link!" },
+  { id: "s2", headline: "Earn with your voice", platform: "Facebook", copy: "Turn your voice into income. Voicearn pays per session — no stress." },
+  { id: "s3", headline: "Side hustle unlocked", platform: "X", copy: "Made ₦2,000 today on @voicearn between classes. This is real." },
+  { id: "s4", headline: "Pay once, earn forever", platform: "Instagram", copy: "Lifetime plans on Voicearn. Activate once and earn every single day." },
+  { id: "s5", headline: "Voice = money", platform: "TikTok", copy: "POV: your voice is now a paycheck. Voicearn is the wave." },
+];
+
+export const QUICK_ACTIONS = [
+  { id: "airtime", label: "Airtime", color: "brand" },
+  { id: "data", label: "Data", color: "emerald" },
+  { id: "electricity", label: "Electricity", color: "amber" },
+  { id: "tv", label: "TV", color: "rose" },
+] as const;
+
+export const COOLDOWN_MS = 60 * 1000; // 60s demo cooldown

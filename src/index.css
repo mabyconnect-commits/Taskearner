@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light dark;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 font-sans antialiased dark:bg-[#0b0710] dark:text-slate-100;
+  overscroll-behavior-y: none;
+}
+
+/* hide scrollbars but keep scrolling */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@layer components {
+  .card {
+    @apply rounded-3xl bg-white shadow-soft dark:bg-white/[0.04] dark:shadow-none;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl font-semibold transition active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-brand-500 text-white shadow-glow hover:bg-brand-600;
+  }
+  .btn-ghost {
+    @apply btn bg-brand-50 text-brand-600 dark:bg-white/10 dark:text-white;
+  }
+  .input {
+    @apply w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-base outline-none transition focus:border-brand-400 focus:ring-4 focus:ring-brand-100 dark:border-white/10 dark:bg-white/5 dark:focus:ring-brand-500/20;
+  }
+  .dotted {
+    background-image: radial-gradient(rgba(139, 47, 214, 0.12) 1px, transparent 1px);
+    background-size: 16px 16px;
+  }
+}
+
+/* smooth page enter */
+.page-enter {
+  animation: pageIn 0.35s ease both;
+}
+@keyframes pageIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

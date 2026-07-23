@@ -1,0 +1,197 @@
+import { useState } from "react";
+import { ArrowUp, Landmark, Plus, Clock, Building2, Check } from "lucide-react";
+import { Layout } from "@/components/Layout";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Sheet } from "@/components/ui/Sheet";
+import { useStore } from "@/store/useStore";
+import { WITHDRAW_MIN } from "@/lib/data";
+import { formatNaira, timeAgo } from "@/lib/format";
+import { useToast } from "@/components/ui/Toast";
+import { cn } from "@/lib/cn";
+
+const BANKS = ["Access Bank", "GTBank", "Zenith Bank", "UBA", "First Bank", "Kuda", "Opay", "Moniepoint", "Wema Bank"];
+
+export default function WalletPage() {
+  const toast = useToast();
+  const { engagement, sales, bank, addBank, withdraw, transactions } = useStore();
+  const [tab, setTab] = useState<"engagement" | "sales">("engagement");
+  const [bankSheet, setBankSheet] = useState(false);
+  const [wdSheet, setWdSheet] = useState(false);
+
+  const balance = tab === "engagement" ? engagement : sales;
+  const payouts = transactions.filter((t) => t.type === "withdraw");
+  const totalWithdrawn = payouts.reduce((s, t) => s + Math.abs(t.amount), 0);
+
+  return (
+    <Layout>
+      <PageHeader
+        title="Withdraw funds"
+        subtitle="Get paid to your bank account"
+        to="/dashboard"
+        right={
+          <button onClick={() => setBankSheet(true)} className="grid h-11 w-11 place-items-center rounded-full bg-slate-100 dark:bg-white/10">
+            <Plus className="h-5 w-5" />
+          </button>
+        }
+      />
+
+      {/* total withdrawn */}
+      <div className="overflow-hidden rounded-4xl bg-gradient-to-br from-brand-500 via-brand-600 to-brand-800 p-6 text-white shadow-card">
+        <p className="flex items-center gap-2 text-sm text-white/70">
+          <ArrowUp className="h-4 w-4" /> Total withdrawn all-time
+        </p>
+        <p className="mt-2 font-display text-4xl font-extrabold">{formatNaira(totalWithdrawn)}</p>
+      </div>
+
+      {/* wallet tabs */}
+      <div className="mt-5 flex rounded-2xl bg-slate-100 p-1.5 dark:bg-white/5">
+        {(["engagement", "sales"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={cn(
+              "flex-1 rounded-xl py-3 text-sm font-bold capitalize transition",
+              tab === t ? "bg-brand-500 text-white shadow" : "text-slate-500",
+            )}
+          >
+            {t} wallet
+          </button>
+        ))}
+      </div>
+
+      {/* balance */}
+      <div className="mt-6 text-center">
+        <p className="text-sm font-semibold capitalize text-slate-400">{tab} balance</p>
+        <p className="font-display text-5xl font-extrabold">{formatNaira(balance)}</p>
+        <p className="mt-1 text-sm text-slate-400">Minimum: {formatNaira(WITHDRAW_MIN)}</p>
+      </div>
+
+      {/* bank / withdraw */}
+      {bank ? (
+        <div className="card mt-6 p-5">
+          <div className="flex items-center gap-3">
+            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-brand-100 text-brand-600 dark:bg-brand-500/20 dark:text-brand-300">
+              <Building2 className="h-6 w-6" />
+            </div>
+            <div className="flex-1">
+              <p className="font-bold">{bank.bankName}</p>
+              <p className="text-sm text-slate-400">{bank.accountNumber} · {bank.accountName}</p>
+            </div>
+            <button onClick={() => setBankSheet(true)} className="text-sm font-bold text-brand-600 dark:text-brand-300">Change</button>
+          </div>
+          <button onClick={() => setWdSheet(true)} className="btn-primary mt-4 w-full py-4 text-lg">
+            <ArrowUp className="h-5 w-5" /> Withdraw {tab} balance
+          </button>
+        </div>
+      ) : (
+        <div className="card mt-6 flex flex-col items-center p-6 text-center">
+          <div className="grid h-16 w-16 place-items-center rounded-full bg-amber-100 dark:bg-amber-500/20">
+            <Landmark className="h-8 w-8 text-amber-500" />
+          </div>
+          <h3 className="mt-3 font-display text-xl font-bold">Add your bank account</h3>
+          <p className="mt-1 text-sm text-slate-400">You need a payout bank before you can withdraw.</p>
+          <button onClick={() => setBankSheet(true)} className="btn-primary mt-4 w-full py-3.5">
+            <Plus className="h-5 w-5" /> Add Bank Account
+          </button>
+        </div>
+      )}
+
+      {/* recent payouts */}
+      <h2 className="mb-3 mt-7 font-display text-xl font-bold">Recent payouts</h2>
+      {payouts.length === 0 ? (
+        <div className="card flex flex-col items-center p-8 text-center">
+          <div className="grid h-16 w-16 place-items-center rounded-full bg-slate-100 dark:bg-white/10">
+            <Clock className="h-8 w-8 text-brand-500" />
+          </div>
+          <p className="mt-3 text-slate-400">No withdrawal history yet</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {payouts.map((t) => (
+            <div key={t.id} className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-soft dark:bg-white/[0.04]">
+              <div className="grid h-11 w-11 place-items-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20">
+                <Check className="h-5 w-5" />
+              </div>
+              <div className="flex-1">
+                <p className="font-bold">{t.title}</p>
+                <p className="text-xs text-slate-400">{timeAgo(t.ts)} · {t.wallet}</p>
+              </div>
+              <span className="font-bold text-slate-700 dark:text-slate-200">{formatNaira(t.amount)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <BankSheet open={bankSheet} onClose={() => setBankSheet(false)} onSave={(b) => { addBank(b); setBankSheet(false); toast("Bank account saved!"); }} banks={BANKS} />
+      <WithdrawSheet
+        open={wdSheet}
+        onClose={() => setWdSheet(false)}
+        balance={balance}
+        onConfirm={(amt) => {
+          const res = withdraw(tab, amt);
+          toast(res.msg, res.ok ? "success" : "error");
+          if (res.ok) setWdSheet(false);
+        }}
+      />
+    </Layout>
+  );
+}
+
+function BankSheet({ open, onClose, onSave, banks }: { open: boolean; onClose: () => void; onSave: (b: { bankName: string; accountNumber: string; accountName: string }) => void; banks: string[] }) {
+  const [bankName, setBankName] = useState(banks[0]);
+  const [acct, setAcct] = useState("");
+  const [name, setName] = useState("");
+  return (
+    <Sheet open={open} onClose={onClose} title="Add bank account">
+      <div className="space-y-4">
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold text-slate-500">Bank</span>
+          <select value={bankName} onChange={(e) => setBankName(e.target.value)} className="input">
+            {banks.map((b) => <option key={b}>{b}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold text-slate-500">Account number</span>
+          <input inputMode="numeric" maxLength={10} value={acct} onChange={(e) => setAcct(e.target.value.replace(/\D/g, ""))} className="input" placeholder="0123456789" />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold text-slate-500">Account name</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} className="input" placeholder="Matthew Adeleye" />
+        </label>
+        <button
+          onClick={() => { if (acct.length === 10 && name.trim()) onSave({ bankName, accountNumber: acct, accountName: name.trim() }); }}
+          disabled={acct.length !== 10 || !name.trim()}
+          className="btn-primary w-full py-4"
+        >
+          Save bank account
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+function WithdrawSheet({ open, onClose, balance, onConfirm }: { open: boolean; onClose: () => void; balance: number; onConfirm: (amt: number) => void }) {
+  const [amt, setAmt] = useState("");
+  const n = Number(amt) || 0;
+  return (
+    <Sheet open={open} onClose={onClose} title="Withdraw funds">
+      <p className="text-sm text-slate-400">Available: <b className="text-slate-700 dark:text-slate-200">{formatNaira(balance)}</b></p>
+      <input
+        inputMode="numeric"
+        value={amt}
+        onChange={(e) => setAmt(e.target.value.replace(/\D/g, ""))}
+        className="input mt-3 text-center text-2xl font-extrabold"
+        placeholder="0"
+      />
+      <div className="mt-3 flex gap-2">
+        {[balance, WITHDRAW_MIN].filter((v) => v >= WITHDRAW_MIN).map((v) => (
+          <button key={v} onClick={() => setAmt(String(v))} className="btn-ghost flex-1 py-2.5 text-sm">{formatNaira(v, false)}</button>
+        ))}
+      </div>
+      <button onClick={() => onConfirm(n)} disabled={n <= 0} className="btn-primary mt-4 w-full py-4">
+        <ArrowUp className="h-5 w-5" /> Confirm withdrawal
+      </button>
+      <p className="mt-2 text-center text-xs text-slate-400">Minimum {formatNaira(WITHDRAW_MIN)} · Payout within 24h</p>
+    </Sheet>
+  );
+}
