@@ -53,7 +53,7 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
                 {name ? name[0].toUpperCase() : "V"}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-display text-lg font-bold">{name || "Voicearn Star"}</p>
+                <p className="truncate font-display text-lg font-bold">{name || "New Earner"}</p>
                 <p className="truncate text-sm text-slate-400">@{username || "guest"}</p>
               </div>
               <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 dark:bg-white/10">

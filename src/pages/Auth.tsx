@@ -20,7 +20,7 @@ export default function Auth() {
       if (!name.trim()) return toast("Please enter your name", "error");
       if (!email.includes("@")) return toast("Enter a valid email", "error");
       signup({ name, email });
-      toast(`Welcome to Voicearn, ${name.split(" ")[0]}! 🎉`);
+      toast(`Welcome to Task Earner Africa, ${name.split(" ")[0]}! 🎉`);
     } else {
       login();
       toast("Welcome back! 👋");
@@ -38,7 +38,7 @@ export default function Auth() {
         <div className="grid h-12 w-12 place-items-center rounded-2xl bg-brand-500 text-white shadow-glow">
           <Mic className="h-6 w-6" />
         </div>
-        <span className="font-display text-2xl font-extrabold">Voicearn</span>
+        <span className="font-display text-2xl font-extrabold">Task Earner <span className="text-brand-500">Africa</span></span>
       </div>
 
       <h1 className="mt-8 font-display text-3xl font-extrabold">
@@ -67,7 +67,7 @@ export default function Auth() {
       </form>
 
       <p className="mt-6 text-center text-slate-500">
-        {mode === "signup" ? "Already have an account?" : "New to Voicearn?"}{" "}
+        {mode === "signup" ? "Already have an account?" : "New to Task Earner Africa?"}{" "}
         <button
           onClick={() => setMode(mode === "signup" ? "login" : "signup")}
           className="font-bold text-brand-600 dark:text-brand-300"

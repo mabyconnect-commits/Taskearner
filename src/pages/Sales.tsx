@@ -15,7 +15,7 @@ export default function Sales() {
   const [copied, setCopied] = useState(false);
   const [drawer, setDrawer] = useState(false);
 
-  const link = `https://voicearn.com/signup?ref=${username || "guest"}`;
+  const link = `https://taskearner.africa/signup?ref=${username || "guest"}`;
   const activated = referrals.filter((r) => r.status === "activated").length;
   const pending = referrals.filter((r) => r.status === "pending").length;
 

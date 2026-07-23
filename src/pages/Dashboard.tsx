@@ -53,7 +53,7 @@ export default function Dashboard() {
   const withdrawnLifetime = transactions.filter((t) => t.type === "withdraw").reduce((s, t) => s + Math.abs(t.amount), 0);
 
   // --- referral ---
-  const link = `https://voicearn.com/signup?ref=${username || "guest"}`;
+  const link = `https://taskearner.africa/signup?ref=${username || "guest"}`;
   const activated = referrals.filter((r) => r.status === "activated").length;
   const pending = referrals.filter((r) => r.status === "pending").length;
   const copyRef = () => {

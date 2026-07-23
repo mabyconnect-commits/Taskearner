@@ -29,7 +29,7 @@ export default function Profile() {
     { icon: Share2, title: "Social Accounts", sub: "For sponsored post tasks", onClick: () => { if (!socialLinked) { linkSocial(); toast("Social accounts linked!"); } }, badge: socialLinked ? { text: "Linked", ok: true } : { text: "Link", ok: false } },
     { icon: Lock, title: "Password & Security", sub: "Change your password", onClick: () => toast("Security settings coming soon", "info"), badge: null },
     { icon: Receipt, title: "Transaction History", sub: "All your earnings & payouts", onClick: () => nav("/transactions"), badge: null },
-    { icon: Headphones, title: "Help & Support", sub: "Contact us", onClick: () => toast("Support: support@voicearn.com", "info"), badge: null },
+    { icon: Headphones, title: "Help & Support", sub: "Contact us", onClick: () => toast("Support: support@taskearner.africa", "info"), badge: null },
   ];
 
   return (
@@ -52,7 +52,7 @@ export default function Profile() {
             <Camera className="h-4 w-4" />
           </button>
         </div>
-        <h2 className="mt-3 font-display text-2xl font-extrabold">{name || "Voicearn Star"}</h2>
+        <h2 className="mt-3 font-display text-2xl font-extrabold">{name || "New Earner"}</h2>
         <p className="text-white/60">@{username || "guest"}</p>
         <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-1.5 text-sm font-extrabold text-brand-800">
           <Crown className="h-4 w-4" /> {planName.toUpperCase()} MEMBER

@@ -206,7 +206,7 @@ export const useStore = create<State>()(
       },
     }),
     {
-      name: "voicearn-store",
+      name: "taskearner-store",
       version: 1,
     },
   ),

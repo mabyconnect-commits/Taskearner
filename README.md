@@ -1,6 +1,8 @@
-# Voicearn 🎙️
+# Task Earner Africa 🎙️🌍
 
-A slick, mobile-first **task-earning platform** — earn with your voice, word games, daily tasks, and sponsored posts, then withdraw to your bank. Inspired by Voicearn, rebuilt cleaner, faster, and fully interactive.
+A slick, mobile-first **task-earning platform for Africa** — turn your voice (and simple daily tasks) into cash. Read short scripts, play word games, complete daily tasks, and share sponsored posts, then withdraw straight to your bank. **Your voice is currency.**
+
+**How it works:** Choose a task → Earn → Cashout to your bank.
 
 > **Demo notice:** This is a front-end prototype. All balances, plans, and payments are simulated locally in your browser (`localStorage`). No real money moves.
 

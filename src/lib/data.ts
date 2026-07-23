@@ -122,13 +122,13 @@ export interface DailyTask {
 }
 
 export const DAILY_TASKS: DailyTask[] = [
-  { id: "t1", title: "Follow Voicearn on Instagram", detail: "Tap follow and confirm your handle.", category: "social" },
+  { id: "t1", title: "Follow Task Earner Africa on Instagram", detail: "Tap follow and confirm your handle.", category: "social" },
   { id: "t2", title: "Watch a 30s promo video", detail: "Watch the full clip to unlock the reward.", category: "watch" },
   { id: "t3", title: "Rate our app 5 stars", detail: "Leave an honest review on the store.", category: "review" },
   { id: "t4", title: "Take a 2-minute survey", detail: "Tell us how you like to earn online.", category: "survey" },
   { id: "t5", title: "Join our Telegram channel", detail: "Stay updated with new earning drops.", category: "social" },
   { id: "t6", title: "Share the daily quote", detail: "Post today's motivation to your story.", category: "social" },
-  { id: "t7", title: "Retweet the pinned post", detail: "Amplify Voicearn to your followers.", category: "social" },
+  { id: "t7", title: "Retweet the pinned post", detail: "Amplify Task Earner Africa to your followers.", category: "social" },
   { id: "t8", title: "Watch: How payouts work", detail: "Learn how withdrawals are processed.", category: "watch" },
 ];
 
@@ -140,11 +140,11 @@ export interface SponsoredPost {
 }
 
 export const SPONSORED_POSTS: SponsoredPost[] = [
-  { id: "s1", headline: "VOICEARN IS PAYING", platform: "WhatsApp", copy: "I just got paid on Voicearn for reading sentences aloud. Join with my link!" },
-  { id: "s2", headline: "Earn with your voice", platform: "Facebook", copy: "Turn your voice into income. Voicearn pays per session — no stress." },
-  { id: "s3", headline: "Side hustle unlocked", platform: "X", copy: "Made ₦2,000 today on @voicearn between classes. This is real." },
-  { id: "s4", headline: "Pay once, earn forever", platform: "Instagram", copy: "Lifetime plans on Voicearn. Activate once and earn every single day." },
-  { id: "s5", headline: "Voice = money", platform: "TikTok", copy: "POV: your voice is now a paycheck. Voicearn is the wave." },
+  { id: "s1", headline: "TASK EARNER IS PAYING", platform: "WhatsApp", copy: "I just got paid on Task Earner Africa for reading sentences aloud. Join with my link!" },
+  { id: "s2", headline: "Your voice is currency", platform: "Facebook", copy: "Turn your talk and daily tasks into alerts. Task Earner Africa pays per session — no stress." },
+  { id: "s3", headline: "Side hustle unlocked", platform: "X", copy: "Made ₦2,000 today on @taskearnerafrica between classes. This is real." },
+  { id: "s4", headline: "Pay once, earn forever", platform: "Instagram", copy: "Lifetime plans on Task Earner Africa. Activate once and earn every single day." },
+  { id: "s5", headline: "Talk = money", platform: "TikTok", copy: "POV: your voice is now a paycheck. Task Earner Africa is the wave. 🌍" },
 ];
 
 export const QUICK_ACTIONS = [
