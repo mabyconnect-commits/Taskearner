@@ -51,7 +51,7 @@ export default function Auth() {
       <form onSubmit={submit} className="mt-8 space-y-4">
         {mode === "signup" && (
           <Field icon={<UserIcon className="h-5 w-5" />} label="Full name">
-            <input className="input pl-11" placeholder="Matthew Adeleye" value={name} onChange={(e) => setName(e.target.value)} />
+            <input className="input pl-11" placeholder="Amara Okeke" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
         )}
         <Field icon={<Mail className="h-5 w-5" />} label="Email">

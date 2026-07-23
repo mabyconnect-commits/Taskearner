@@ -156,7 +156,7 @@ function BankSheet({ open, onClose, onSave, banks }: { open: boolean; onClose: (
         </label>
         <label className="block">
           <span className="mb-1.5 block text-sm font-semibold text-slate-500">Account name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} className="input" placeholder="Matthew Adeleye" />
+          <input value={name} onChange={(e) => setName(e.target.value)} className="input" placeholder="Amara Okeke" />
         </label>
         <button
           onClick={() => { if (acct.length === 10 && name.trim()) onSave({ bankName, accountNumber: acct, accountName: name.trim() }); }}
