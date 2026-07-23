@@ -26,7 +26,7 @@ export default function Profile() {
   const rows = [
     { icon: UserIcon, title: "Personal Info", sub: "Name, phone, email", onClick: () => setEditSheet(true), badge: null },
     { icon: Building2, title: "Bank Account", sub: "Add your payout bank", onClick: () => nav("/wallet"), badge: bank ? { text: "Linked", ok: true } : { text: "Required", ok: false } },
-    { icon: Share2, title: "Social Accounts", sub: "For sponsored post tasks", onClick: () => { if (!socialLinked) { linkSocial(); toast("Social accounts linked!"); } }, badge: socialLinked ? { text: "Linked", ok: true } : { text: "Link", ok: false } },
+    { icon: Share2, title: "Social Accounts", sub: "For sponsored post tasks", onClick: async () => { if (!socialLinked) { const r = await linkSocial(); toast(r.msg, r.ok ? "success" : "error"); } }, badge: socialLinked ? { text: "Linked", ok: true } : { text: "Link", ok: false } },
     { icon: Lock, title: "Password & Security", sub: "Change your password", onClick: () => toast("Security settings coming soon", "info"), badge: null },
     { icon: Receipt, title: "Transaction History", sub: "All your earnings & payouts", onClick: () => nav("/transactions"), badge: null },
     { icon: Headphones, title: "Help & Support", sub: "Contact us", onClick: () => toast("Support: support@taskearner.africa", "info"), badge: null },
@@ -111,7 +111,7 @@ export default function Profile() {
             <span className="mb-1.5 block text-sm font-semibold text-slate-500">Email</span>
             <input value={e} onChange={(ev) => setE(ev.target.value)} className="input" />
           </label>
-          <button onClick={() => { updateProfile({ name: n, phone: p, email: e }); setEditSheet(false); toast("Profile updated!"); }} className="btn-primary w-full py-4">
+          <button onClick={async () => { const r = await updateProfile({ name: n, phone: p, email: e }); toast(r.msg, r.ok ? "success" : "error"); if (r.ok) setEditSheet(false); }} className="btn-primary w-full py-4">
             <Check className="h-5 w-5" /> Save changes
           </button>
         </div>

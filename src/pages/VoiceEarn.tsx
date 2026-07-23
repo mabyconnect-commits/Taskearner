@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useStore } from "@/store/useStore";
-import { planById, VOICE_SENTENCES, COOLDOWN_MS } from "@/lib/data";
+import { planById, VOICE_SENTENCES } from "@/lib/data";
 import { formatNaira } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
@@ -15,10 +15,11 @@ type Phase = "idle" | "reading" | "done";
 export default function VoiceEarn() {
   const nav = useNavigate();
   const toast = useToast();
-  const { plan, earn, cooldowns, setCooldown } = useStore();
+  const { plan, earnActivity, cooldowns } = useStore();
   const p = planById(plan);
 
   const [phase, setPhase] = useState<Phase>("idle");
+  const [earnedAmt, setEarnedAmt] = useState(p.perVoice);
   const [sentenceIdx, setSentenceIdx] = useState(0);
   const [wordIdx, setWordIdx] = useState(-1);
   const timer = useRef<number | null>(null);
@@ -67,11 +68,16 @@ export default function VoiceEarn() {
     }, 380);
   };
 
-  const finish = () => {
+  const finish = async () => {
+    const res = await earnActivity("voice");
+    if (!res.ok) {
+      toast(res.msg, "error");
+      setPhase("idle");
+      return;
+    }
+    setEarnedAmt(res.amount ?? p.perVoice);
     setPhase("done");
-    earn({ type: "voice", title: "Voice Earn session completed", amount: p.perVoice });
-    setCooldown("voice", COOLDOWN_MS);
-    toast(`You earned ${formatNaira(p.perVoice)}! 🎙️`);
+    toast(`You earned ${formatNaira(res.amount ?? p.perVoice)}! 🎙️`);
   };
 
   const progress = phase === "reading" ? ((sentenceIdx + (wordIdx + 1) / Math.max(words.length, 1)) / sentences.length) * 100 : phase === "done" ? 100 : 0;
@@ -114,7 +120,7 @@ export default function VoiceEarn() {
           </motion.div>
           <h2 className="mt-4 font-display text-2xl font-extrabold">Session complete!</h2>
           <p className="mt-1 text-slate-400">Nicely read. Your reward has been added.</p>
-          <p className="mt-4 font-display text-4xl font-extrabold text-emerald-500">+{formatNaira(p.perVoice)}</p>
+          <p className="mt-4 font-display text-4xl font-extrabold text-emerald-500">+{formatNaira(earnedAmt)}</p>
           <div className="mt-6 flex w-full gap-3">
             <button onClick={() => nav("/earn")} className="btn-ghost flex-1 py-3.5">Back to Earn</button>
             <button onClick={() => nav("/wallet")} className="btn-primary flex-1 py-3.5">Withdraw</button>

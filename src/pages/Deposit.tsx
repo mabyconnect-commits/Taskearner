@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Rocket, Info, Wallet, ChevronRight, Loader2, Check } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -14,11 +14,25 @@ const PRESETS = [1500, 3000, 5000, 9500, 15000];
 export default function Deposit() {
   const nav = useNavigate();
   const toast = useToast();
-  const { deposit, fund } = useStore();
+  const [params, setParams] = useSearchParams();
+  const { deposit, fund, verifyFund } = useStore();
   const [amt, setAmt] = useState("");
   const [pay, setPay] = useState(false);
   const [stage, setStage] = useState<"pay" | "processing" | "done">("pay");
   const n = Number(amt) || 0;
+
+  // Handle the redirect back from NekPay: /deposit?ref=<reference>
+  useEffect(() => {
+    const ref = params.get("ref");
+    if (!ref) return;
+    (async () => {
+      const res = await verifyFund(ref);
+      toast(res.ok ? "Payment confirmed — wallet funded! 🎉" : res.msg, res.ok ? "success" : "error");
+      params.delete("ref");
+      setParams(params, { replace: true });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const startPay = () => {
     if (n < 100) return toast("Enter at least ₦100", "error");
@@ -26,12 +40,15 @@ export default function Deposit() {
     setPay(true);
   };
 
-  const confirm = () => {
+  const confirm = async () => {
     setStage("processing");
-    setTimeout(() => {
-      fund(n);
-      setStage("done");
-    }, 1800);
+    const res = await fund(n);
+    if (!res.ok) {
+      toast(res.msg, "error");
+      setStage("pay");
+      return;
+    }
+    setStage("done");
   };
 
   return (

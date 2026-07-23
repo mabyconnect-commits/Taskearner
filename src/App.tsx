@@ -30,12 +30,31 @@ function Protected({ children }: { children: JSX.Element }) {
 
 export default function App() {
   const theme = useStore((s) => s.theme);
+  const booting = useStore((s) => s.booting);
+  const boot = useStore((s) => s.boot);
+
+  useEffect(() => {
+    boot();
+  }, [boot]);
 
   useEffect(() => {
     const root = document.documentElement;
     root.classList.toggle("dark", theme === "dark");
     root.style.colorScheme = theme;
   }, [theme]);
+
+  if (booting) {
+    return (
+      <div className="grid min-h-full place-items-center bg-gradient-to-b from-brand-600 to-[#2b0644]">
+        <div className="flex flex-col items-center gap-4 text-white">
+          <div className="grid h-16 w-16 place-items-center rounded-3xl bg-white/15 ring-1 ring-white/25">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+          </div>
+          <p className="font-display text-lg font-bold">Task Earner Africa</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ToastProvider>

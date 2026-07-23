@@ -14,8 +14,8 @@ export default function Packages() {
   const { deposit, plan, activatePlan } = useStore();
   const current = planById(plan);
 
-  const onActivate = (id: typeof PLANS[number]["id"]) => {
-    const res = activatePlan(id);
+  const onActivate = async (id: typeof PLANS[number]["id"]) => {
+    const res = await activatePlan(id);
     toast(res.msg, res.ok ? "success" : "error");
   };
 

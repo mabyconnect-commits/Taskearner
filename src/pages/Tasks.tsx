@@ -15,7 +15,7 @@ const iconFor = (c: DailyTask["category"]) =>
 export default function Tasks() {
   const nav = useNavigate();
   const toast = useToast();
-  const { plan, completedTasks, completeTask } = useStore();
+  const { plan, completedTasks, earnActivity } = useStore();
   const p = planById(plan);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -24,11 +24,11 @@ export default function Tasks() {
   const doTask = (t: DailyTask) => {
     if (completedTasks.includes(t.id) || busy) return;
     setBusy(t.id);
-    setTimeout(() => {
-      completeTask(t.id, p.perTask, `Task: ${t.title}`);
+    setTimeout(async () => {
+      const res = await earnActivity("task", t.id);
       setBusy(null);
-      toast(`Task done! +${formatNaira(p.perTask)}`);
-    }, 1400);
+      toast(res.ok ? `Task done! +${formatNaira(res.amount ?? p.perTask)}` : res.msg, res.ok ? "success" : "error");
+    }, 1200);
   };
 
   const done = completedTasks.filter((id) => DAILY_TASKS.some((t) => t.id === id)).length;

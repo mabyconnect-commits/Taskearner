@@ -11,7 +11,7 @@ import { Menu } from "lucide-react";
 
 export default function Sales() {
   const toast = useToast();
-  const { username, sales, referrals, simulateReferral } = useStore();
+  const { username, sales, referrals, simulateReferral, mode } = useStore();
   const [copied, setCopied] = useState(false);
   const [drawer, setDrawer] = useState(false);
 
@@ -110,9 +110,11 @@ export default function Sales() {
       <div className="mt-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-display text-xl font-bold">Your referrals</h2>
-          <button onClick={() => { simulateReferral(); toast("New referral activated a plan! 💰"); }} className="text-sm font-bold text-brand-600 dark:text-brand-300">
-            + Simulate
-          </button>
+          {mode === "offline" && (
+            <button onClick={async () => { const r = await simulateReferral(); toast(r.msg, r.ok ? "success" : "info"); }} className="text-sm font-bold text-brand-600 dark:text-brand-300">
+              + Simulate
+            </button>
+          )}
         </div>
         {referrals.length === 0 ? (
           <div className="card flex flex-col items-center p-8 text-center">

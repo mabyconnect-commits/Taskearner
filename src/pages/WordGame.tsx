@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useStore } from "@/store/useStore";
-import { planById, WORD_GAME_WORDS, COOLDOWN_MS } from "@/lib/data";
+import { planById, WORD_GAME_WORDS } from "@/lib/data";
 import { formatNaira } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
@@ -16,7 +16,7 @@ const TIME = 10;
 export default function WordGame() {
   const nav = useNavigate();
   const toast = useToast();
-  const { plan, earn, setCooldown } = useStore();
+  const { plan, earnActivity } = useStore();
   const p = planById(plan);
 
   const [phase, setPhase] = useState<"idle" | "playing" | "done">("idle");
@@ -25,6 +25,7 @@ export default function WordGame() {
   const [earned, setEarned] = useState(0);
   const [words] = useState(() => [...WORD_GAME_WORDS].sort(() => Math.random() - 0.5).slice(0, ROUNDS));
   const tick = useRef<number | null>(null);
+  const correct = useRef(0);
 
   useEffect(() => () => { if (tick.current) clearInterval(tick.current); }, []);
 
@@ -49,6 +50,7 @@ export default function WordGame() {
   const start = () => {
     setPhase("playing");
     setEarned(0);
+    correct.current = 0;
     startRound(0);
   };
 
@@ -60,11 +62,10 @@ export default function WordGame() {
     } catch { /* ignore */ }
   };
 
-  const next = (r: number, success: boolean) => {
+  const next = async (r: number, success: boolean) => {
     if (tick.current) clearInterval(tick.current);
     if (success) {
-      setEarned((e) => e + p.perWord);
-      earn({ type: "word", title: "Word Game completed", amount: p.perWord });
+      correct.current += 1;
       toast(`Correct! +${formatNaira(p.perWord)}`);
     } else {
       toast("Time's up on that word!", "error");
@@ -73,7 +74,13 @@ export default function WordGame() {
       startRound(r + 1);
     } else {
       setPhase("done");
-      setCooldown("word", COOLDOWN_MS);
+      if (correct.current > 0) {
+        const res = await earnActivity("word", undefined, correct.current);
+        setEarned(res.ok ? res.amount ?? p.perWord * correct.current : 0);
+        if (!res.ok) toast(res.msg, "error");
+      } else {
+        setEarned(0);
+      }
     }
   };
 

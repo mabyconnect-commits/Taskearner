@@ -122,13 +122,13 @@ export default function WalletPage() {
         </div>
       )}
 
-      <BankSheet open={bankSheet} onClose={() => setBankSheet(false)} onSave={(b) => { addBank(b); setBankSheet(false); toast("Bank account saved!"); }} banks={BANKS} />
+      <BankSheet open={bankSheet} onClose={() => setBankSheet(false)} onSave={async (b) => { const r = await addBank(b); toast(r.msg, r.ok ? "success" : "error"); if (r.ok) setBankSheet(false); }} banks={BANKS} />
       <WithdrawSheet
         open={wdSheet}
         onClose={() => setWdSheet(false)}
         balance={balance}
-        onConfirm={(amt) => {
-          const res = withdraw(tab, amt);
+        onConfirm={async (amt) => {
+          const res = await withdraw(tab, amt);
           toast(res.msg, res.ok ? "success" : "error");
           if (res.ok) setWdSheet(false);
         }}

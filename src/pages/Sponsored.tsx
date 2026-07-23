@@ -20,9 +20,9 @@ const platformColor: Record<SponsoredPost["platform"], string> = {
 export default function Sponsored() {
   const nav = useNavigate();
   const toast = useToast();
-  const { plan, socialLinked, earn } = useStore();
+  const { plan, socialLinked, earnActivity, completedPosts } = useStore();
   const p = planById(plan);
-  const [shared, setShared] = useState<string[]>([]);
+  const [shared, setShared] = useState<string[]>(completedPosts);
   const [busy, setBusy] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -38,12 +38,16 @@ export default function Sponsored() {
   const share = (post: SponsoredPost) => {
     if (shared.includes(post.id) || busy) return;
     setBusy(post.id);
-    setTimeout(() => {
-      setShared((s) => [...s, post.id]);
-      earn({ type: "post", title: `Sponsored Post: ${post.headline}`, amount: p.perPost });
+    setTimeout(async () => {
+      const res = await earnActivity("post", post.id);
       setBusy(null);
-      toast(`Post verified! +${formatNaira(p.perPost)}`);
-    }, 1600);
+      if (res.ok) {
+        setShared((s) => [...s, post.id]);
+        toast(`Post verified! +${formatNaira(res.amount ?? p.perPost)}`);
+      } else {
+        toast(res.msg, "error");
+      }
+    }, 1400);
   };
 
   return (

@@ -34,15 +34,15 @@ export default function Bills() {
     if (n < 50) return toast("Enter an amount of at least ₦50", "error");
     if (n > wallet) return toast("Insufficient wallet balance", "error");
     setStage("processing");
-    setTimeout(() => {
-      const res = payBill({ amount: n, title: `${cfg.title}: ${provider} ${target}` });
+    setTimeout(async () => {
+      const res = await payBill({ amount: n, title: `${cfg.title}: ${provider} ${target}` });
       if (!res.ok) {
         toast(res.msg, "error");
         setStage("form");
         return;
       }
       setStage("done");
-    }, 1600);
+    }, 1200);
   };
 
   const Icon = cfg.icon;

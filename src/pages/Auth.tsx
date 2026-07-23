@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Mic, Mail, Lock, User as UserIcon, ArrowLeft } from "lucide-react";
+import { Mic, Mail, Lock, User as UserIcon, ArrowLeft, Loader2 } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { useToast } from "@/components/ui/Toast";
 
@@ -10,21 +10,30 @@ export default function Auth() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
   const { signup, login } = useStore();
   const nav = useNavigate();
   const toast = useToast();
+  const ref = params.get("ref") || undefined;
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (busy) return;
     if (mode === "signup") {
       if (!name.trim()) return toast("Please enter your name", "error");
       if (!email.includes("@")) return toast("Enter a valid email", "error");
-      signup({ name, email });
-      toast(`Welcome to Task Earner Africa, ${name.split(" ")[0]}! 🎉`);
-    } else {
-      login();
-      toast("Welcome back! 👋");
+      if (password.length < 6) return toast("Password must be at least 6 characters", "error");
+    } else if (!email || !password) {
+      return toast("Enter your email and password", "error");
     }
+    setBusy(true);
+    const res =
+      mode === "signup"
+        ? await signup({ name, email, password, ref })
+        : await login({ email, password });
+    setBusy(false);
+    if (!res.ok) return toast(res.msg, "error");
+    toast(mode === "signup" ? `Welcome to Task Earner Africa, ${name.split(" ")[0]}! 🎉` : "Welcome back! 👋");
     nav("/dashboard");
   };
 
@@ -61,8 +70,8 @@ export default function Auth() {
           <input className="input pl-11" placeholder="••••••••" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>
 
-        <button className="btn-primary w-full py-4 text-lg">
-          {mode === "signup" ? "Create account" : "Log in"}
+        <button disabled={busy} className="btn-primary w-full py-4 text-lg">
+          {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : mode === "signup" ? "Create account" : "Log in"}
         </button>
       </form>
 
