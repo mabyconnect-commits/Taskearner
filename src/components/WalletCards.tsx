@@ -14,11 +14,23 @@ export function WalletCards() {
 
   const cards = [
     {
+      key: "total",
+      label: "Total balance",
+      value: engagement + sales + deposit,
+      gradient: "from-brand-500 via-brand-600 to-brand-800",
+      icon: <Mic className="h-6 w-6 text-white" />,
+      iconWrap: "bg-gradient-to-br from-amber-400 to-amber-500 ring-amber-300/50 shadow-lg",
+      primary: { label: "Withdraw", icon: <ArrowUp className="h-4 w-4" />, onClick: () => nav("/wallet") },
+      secondary: { label: "Upgrade", icon: <Rocket className="h-4 w-4" />, onClick: () => nav("/packages") },
+      sub: `@${username || "guest"} · ${planName}`,
+    },
+    {
       key: "engagement",
       label: "Engagement balance",
       value: engagement,
       gradient: "from-brand-500 via-brand-600 to-brand-800",
       icon: <Mic className="h-6 w-6" />,
+      iconWrap: "",
       primary: { label: "Withdraw", icon: <ArrowUp className="h-4 w-4" />, onClick: () => nav("/wallet") },
       secondary: { label: "Upgrade", icon: <Rocket className="h-4 w-4" />, onClick: () => nav("/packages") },
       sub: `@${username || "guest"} · ${planName}`,
@@ -29,6 +41,7 @@ export function WalletCards() {
       value: sales,
       gradient: "from-indigo-500 via-violet-600 to-brand-800",
       icon: <TrendingUp className="h-6 w-6" />,
+      iconWrap: "",
       primary: { label: "Withdraw", icon: <ArrowUp className="h-4 w-4" />, onClick: () => nav("/wallet") },
       secondary: { label: "Refer", icon: <Rocket className="h-4 w-4" />, onClick: () => nav("/sales") },
       sub: "Affiliate earnings",
@@ -39,6 +52,7 @@ export function WalletCards() {
       value: deposit,
       gradient: "from-[#1c1230] via-[#241a3a] to-[#0f0a18]",
       icon: <Plus className="h-6 w-6" />,
+      iconWrap: "",
       primary: { label: "Fund", icon: <Plus className="h-4 w-4" />, onClick: () => nav("/deposit") },
       secondary: { label: "Upgrade", icon: <Rocket className="h-4 w-4" />, onClick: () => nav("/packages") },
       sub: "For activating & upgrading plans",
@@ -73,7 +87,10 @@ export function WalletCards() {
                 </p>
                 <p className="mt-2 text-sm text-white/60">{c.sub}</p>
               </div>
-              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white/15 ring-1 ring-white/20 backdrop-blur">
+              <div className={cn(
+                "grid h-12 w-12 place-items-center rounded-2xl ring-1 backdrop-blur",
+                c.iconWrap || "bg-white/15 ring-white/20",
+              )}>
                 {c.icon}
               </div>
             </div>
