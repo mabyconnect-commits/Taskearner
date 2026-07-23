@@ -99,10 +99,20 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
             </nav>
 
             <div className="space-y-2 pt-2">
-              <a className="btn w-full bg-sky-500 py-3 text-white" href="#" onClick={(e) => e.preventDefault()}>
+              <a
+                className="btn w-full bg-sky-500 py-3 text-white"
+                href="https://t.me/taskearning101"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 <Send className="h-4 w-4" /> Telegram Channel
               </a>
-              <a className="btn-ghost w-full py-3" href="#" onClick={(e) => e.preventDefault()}>
+              <a
+                className="btn-ghost w-full py-3"
+                href="https://t.me/taskearning101"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 <MessageCircle className="h-4 w-4" /> Community Group
               </a>
               <button
