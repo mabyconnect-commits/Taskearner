@@ -27,7 +27,7 @@ export default function Profile() {
     { icon: UserIcon, title: "Personal Info", sub: "Name, phone, email", onClick: () => setEditSheet(true), badge: null },
     { icon: Building2, title: "Bank Account", sub: "Add your payout bank", onClick: () => nav("/wallet"), badge: bank ? { text: "Linked", ok: true } : { text: "Required", ok: false } },
     { icon: Share2, title: "Social Accounts", sub: "For sponsored post tasks", onClick: async () => { if (!socialLinked) { const r = await linkSocial(); toast(r.msg, r.ok ? "success" : "error"); } }, badge: socialLinked ? { text: "Linked", ok: true } : { text: "Link", ok: false } },
-    { icon: Lock, title: "Password & Security", sub: "Change your password", onClick: () => toast("Security settings coming soon", "info"), badge: null },
+    { icon: Lock, title: "Password & Security", sub: "Change your password", onClick: () => nav("/security"), badge: null },
     { icon: Receipt, title: "Transaction History", sub: "All your earnings & payouts", onClick: () => nav("/transactions"), badge: null },
     { icon: Headphones, title: "Help & Support", sub: "Contact us", onClick: () => toast("Support: support@taskearner.africa", "info"), badge: null },
   ];

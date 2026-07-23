@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Sheet } from "@/components/ui/Sheet";
 import { useStore } from "@/store/useStore";
 import { WITHDRAW_MIN } from "@/lib/data";
-import { formatNaira, timeAgo } from "@/lib/format";
+import { formatNaira, timeAgo, maskAccount, maskName } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 
@@ -74,8 +74,8 @@ export default function WalletPage() {
               <Building2 className="h-6 w-6" />
             </div>
             <div className="flex-1">
-              <p className="font-bold">{bank.bankName}</p>
-              <p className="text-sm text-slate-400">{bank.accountNumber} · {bank.accountName}</p>
+              <p className="font-bold">{maskName(bank.accountName)}</p>
+              <p className="text-sm text-slate-400">{bank.bankName} · {maskAccount(bank.accountNumber)}</p>
             </div>
             <button onClick={() => setBankSheet(true)} className="text-sm font-bold text-brand-600 dark:text-brand-300">Change</button>
           </div>
@@ -138,9 +138,19 @@ export default function WalletPage() {
 }
 
 function BankSheet({ open, onClose, onSave, banks }: { open: boolean; onClose: () => void; onSave: (b: { bankName: string; accountNumber: string; accountName: string }) => void; banks: string[] }) {
+  const toast = useToast();
   const [bankName, setBankName] = useState(banks[0]);
   const [acct, setAcct] = useState("");
   const [name, setName] = useState("");
+
+  const acctError = acct.length > 0 && acct.length !== 10;
+
+  const submit = () => {
+    if (acct.length !== 10) return toast("Account number must be exactly 10 digits", "error");
+    if (!name.trim()) return toast("Enter the account name", "error");
+    onSave({ bankName, accountNumber: acct, accountName: name.trim() });
+  };
+
   return (
     <Sheet open={open} onClose={onClose} title="Add bank account">
       <div className="space-y-4">
@@ -151,18 +161,25 @@ function BankSheet({ open, onClose, onSave, banks }: { open: boolean; onClose: (
           </select>
         </label>
         <label className="block">
-          <span className="mb-1.5 block text-sm font-semibold text-slate-500">Account number</span>
-          <input inputMode="numeric" maxLength={10} value={acct} onChange={(e) => setAcct(e.target.value.replace(/\D/g, ""))} className="input" placeholder="0123456789" />
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-500">Account number</span>
+            <span className={cn("text-xs font-semibold", acctError ? "text-rose-500" : "text-slate-400")}>{acct.length}/10</span>
+          </div>
+          <input
+            inputMode="numeric"
+            maxLength={10}
+            value={acct}
+            onChange={(e) => setAcct(e.target.value.replace(/\D/g, ""))}
+            className={cn("input", acctError && "border-rose-400 focus:border-rose-400 focus:ring-rose-100")}
+            placeholder="0123456789"
+          />
+          {acctError && <span className="mt-1 block text-xs font-medium text-rose-500">Nigerian account numbers are 10 digits.</span>}
         </label>
         <label className="block">
           <span className="mb-1.5 block text-sm font-semibold text-slate-500">Account name</span>
           <input value={name} onChange={(e) => setName(e.target.value)} className="input" placeholder="Amara Okeke" />
         </label>
-        <button
-          onClick={() => { if (acct.length === 10 && name.trim()) onSave({ bankName, accountNumber: acct, accountName: name.trim() }); }}
-          disabled={acct.length !== 10 || !name.trim()}
-          className="btn-primary w-full py-4"
-        >
+        <button onClick={submit} className="btn-primary w-full py-4">
           Save bank account
         </button>
       </div>

@@ -20,6 +20,7 @@ import Transactions from "@/pages/Transactions";
 import Leaderboard from "@/pages/Leaderboard";
 import Notifications from "@/pages/Notifications";
 import Bills from "@/pages/Bills";
+import Security from "@/pages/Security";
 
 function Protected({ children }: { children: JSX.Element }) {
   const authed = useStore((s) => s.authed);
@@ -72,6 +73,7 @@ export default function App() {
         <Route path="/deposit" element={<Protected><Deposit /></Protected>} />
         <Route path="/packages" element={<Protected><Packages /></Protected>} />
         <Route path="/profile" element={<Protected><Profile /></Protected>} />
+        <Route path="/security" element={<Protected><Security /></Protected>} />
         <Route path="/transactions" element={<Protected><Transactions /></Protected>} />
         <Route path="/leaderboard" element={<Protected><Leaderboard /></Protected>} />
         <Route path="/notifications" element={<Protected><Notifications /></Protected>} />

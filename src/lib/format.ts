@@ -18,6 +18,20 @@ export function timeAgo(ts: number): string {
   return `${d}d ago`;
 }
 
+// Mask a bank account number, keeping only the last 4 digits visible.
+export function maskAccount(num: string): string {
+  const n = (num || "").trim();
+  if (n.length <= 4) return "•".repeat(n.length);
+  return "•".repeat(n.length - 4) + n.slice(-4);
+}
+
+// Mask an account holder name, keeping the first and last character.
+export function maskName(name: string): string {
+  const n = (name || "").trim();
+  if (n.length <= 2) return n ? n[0] + "•" : "";
+  return n[0] + "•".repeat(Math.min(n.length - 2, 10)) + n[n.length - 1];
+}
+
 export function greeting(d = new Date()): string {
   const h = d.getHours();
   if (h < 12) return "Good morning";

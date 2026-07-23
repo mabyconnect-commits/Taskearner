@@ -66,6 +66,7 @@ interface State {
   activatePlan: (id: PlanId) => Promise<Result>;
   addBank: (b: Bank) => Promise<Result>;
   linkSocial: () => Promise<Result>;
+  changePassword: (p: { currentPassword: string; newPassword: string }) => Promise<Result>;
   updateProfile: (p: { name?: string; phone?: string; email?: string }) => Promise<Result>;
   payBill: (p: { amount: number; title: string }) => Promise<Result>;
   refresh: () => Promise<void>;
@@ -374,6 +375,19 @@ export const useStore = create<State>()(
           }
           set({ socialLinked: true });
           return { ok: true, msg: "Social accounts linked!" };
+        },
+
+        changePassword: async (p) => {
+          if (online()) {
+            try {
+              await api.changePassword(p);
+              return { ok: true, msg: "Password updated successfully!" };
+            } catch (e) {
+              return { ok: false, msg: errMsg(e) };
+            }
+          }
+          // offline demo has no stored password
+          return { ok: true, msg: "Password updated successfully!" };
         },
 
         updateProfile: async (p) => {

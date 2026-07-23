@@ -67,6 +67,7 @@ export const api = {
   me: () => req<{ user: ServerUser; transactions: any[]; referrals: any[] }>("/me"),
   updateProfile: (b: { name?: string; phone?: string; email?: string }) => req("/profile", "PATCH", b),
   linkSocial: () => req("/profile/social", "POST"),
+  changePassword: (b: { currentPassword: string; newPassword: string }) => req("/profile/password", "POST", b),
   addBank: (b: { bankName: string; accountNumber: string; accountName: string }) => req("/bank", "POST", b),
   earn: (b: { kind: string; refId?: string; count?: number }) => req("/earn", "POST", b),
   activate: (b: { planId: string }) => req("/plans/activate", "POST", b),

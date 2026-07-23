@@ -330,6 +330,19 @@ async function payBill(req: ApiRequest): Promise<ApiResponse> {
   return ok({ user: await loadState(uid), transactions: await txList(uid) });
 }
 
+async function changePassword(req: ApiRequest): Promise<ApiResponse> {
+  const uid = requireAuth(req);
+  const { currentPassword, newPassword } = req.body || {};
+  if (!newPassword || String(newPassword).length < 6) return err("New password must be at least 6 characters");
+  const [u] = await sql`SELECT password_hash FROM users WHERE id = ${uid}`;
+  if (!u) return err("User not found", 404);
+  const good = await comparePassword(String(currentPassword || ""), u.password_hash);
+  if (!good) return err("Your current password is incorrect", 401);
+  const hash = await hashPassword(String(newPassword));
+  await sql`UPDATE users SET password_hash = ${hash} WHERE id = ${uid}`;
+  return ok({ ok: true });
+}
+
 async function getTransactions(req: ApiRequest): Promise<ApiResponse> {
   const uid = requireAuth(req);
   return ok({ transactions: await txList(uid) });
@@ -351,6 +364,7 @@ const routes: Record<string, Handler> = {
   "GET /me": me,
   "PATCH /profile": updateProfile,
   "POST /profile/social": linkSocial,
+  "POST /profile/password": changePassword,
   "POST /bank": addBank,
   "POST /earn": earn,
   "POST /plans/activate": activatePlan,
