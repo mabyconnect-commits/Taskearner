@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   X, Home, Coins, Receipt, Wallet, ArrowUpCircle, Crown, Users, Trophy, Bell, User,
@@ -29,7 +30,7 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
     nav(to);
   };
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -118,6 +119,7 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
           </motion.aside>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

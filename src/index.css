@@ -52,9 +52,11 @@ body {
   }
 }
 
-/* smooth page enter */
+/* smooth page enter — no fill-mode so no transform lingers after the
+   animation (a persisted transform creates a stacking context that would
+   trap portalled overlays/nav). */
 .page-enter {
-  animation: pageIn 0.35s ease both;
+  animation: pageIn 0.35s ease;
 }
 @keyframes pageIn {
   from {

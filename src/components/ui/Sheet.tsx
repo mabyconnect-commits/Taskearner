@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 
@@ -13,7 +14,7 @@ export function Sheet({
   title?: string;
   children: ReactNode;
 }) {
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -45,6 +46,7 @@ export function Sheet({
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
