@@ -910,6 +910,8 @@ export async function handleApi(req: ApiRequest): Promise<ApiResponse> {
     // even when the database isn't configured/reachable.
     if (key === "GET /health") return await health();
     if (key === "GET /selftest") return await selftest();
+    // Two-segment GET to confirm nested paths reach the function (routing test).
+    if (key === "GET /diag/ping") return ok({ pong: true, path: req.path, build: "2026-07-24-logs" });
     await ensureSchema();
     const handler = routes[key];
     if (!handler) return err(`No route for ${key}`, 404);
