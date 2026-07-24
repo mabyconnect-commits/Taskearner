@@ -6,7 +6,19 @@ import { api, ApiError, getToken, setToken, ServerUser } from "@/lib/api";
 export type TxType = "voice" | "word" | "task" | "post" | "fund" | "withdraw" | "plan" | "commission" | "bill";
 export type ActivityKind = "voice" | "word" | "task" | "post";
 export type Mode = "online" | "offline";
-export type Result = { ok: boolean; msg: string; amount?: number };
+export interface WithdrawReceipt {
+  reference: string;
+  amount: number; // gross
+  fee: number;
+  net: number;
+  wallet: "engagement" | "sales";
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  status: string; // pending | processing | success
+  ts: number;
+}
+export type Result = { ok: boolean; msg: string; amount?: number; receipt?: WithdrawReceipt };
 
 export interface Transaction {
   id: string;
@@ -14,6 +26,7 @@ export interface Transaction {
   title: string;
   amount: number;
   wallet: "engagement" | "sales" | "deposit";
+  status?: string;
   ts: number;
 }
 export interface Bank {
@@ -119,7 +132,7 @@ export const useStore = create<State>()(
         }));
       };
       const mapTx = (rows: any[]): Transaction[] =>
-        rows.map((t) => ({ id: t.id, type: t.type, title: t.title, amount: t.amount, wallet: t.wallet, ts: t.ts }));
+        rows.map((t) => ({ id: t.id, type: t.type, title: t.title, amount: t.amount, wallet: t.wallet, status: t.status, ts: t.ts }));
       const mapRefs = (rows: any[]): Referral[] =>
         rows.map((r) => ({ id: r.id, name: r.name, plan: r.plan, status: r.status, commission: r.commission, ts: r.ts }));
 
@@ -341,7 +354,7 @@ export const useStore = create<State>()(
             try {
               const r: any = await api.withdraw({ wallet, amount });
               applyUser(r.user, r.transactions);
-              return { ok: true, msg: "Withdrawal submitted. Payout within 24h." };
+              return { ok: true, msg: "Withdrawal submitted. Payout within 24h.", receipt: r.receipt };
             } catch (e) {
               return { ok: false, msg: errMsg(e) };
             }
@@ -355,11 +368,19 @@ export const useStore = create<State>()(
           // 3.5% tax + ₦50 VAT come off the payout; wallet is debited the gross.
           const fee = withdrawFee(amount);
           const net = withdrawNet(amount);
+          const reference = `WD-${wallet === "sales" ? "S" : "E"}-${Date.now()}-${Math.floor(Math.random() * 90000 + 10000)}`;
+          const t = tx("withdraw", `Withdrawal to ${s.bank!.bankName} · ₦${net.toLocaleString()} net (₦${fee.toLocaleString()} fee)`, -amount, wallet);
+          t.status = "pending";
           set((st) => ({
             [wallet]: bal - amount,
-            transactions: [tx("withdraw", `Withdrawal to ${s.bank!.bankName} · ₦${net.toLocaleString()} net (₦${fee.toLocaleString()} fee)`, -amount, wallet), ...st.transactions].slice(0, 60),
+            transactions: [t, ...st.transactions].slice(0, 60),
           }) as Partial<State>);
-          return { ok: true, msg: `Withdrawal submitted. You'll receive ₦${net.toLocaleString()} within 24h.` };
+          const receipt: WithdrawReceipt = {
+            reference, amount, fee, net, wallet,
+            bankName: s.bank!.bankName, accountNumber: s.bank!.accountNumber, accountName: s.bank!.accountName,
+            status: "pending", ts: t.ts,
+          };
+          return { ok: true, msg: `Withdrawal submitted. You'll receive ₦${net.toLocaleString()} within 24h.`, receipt };
         },
 
         activatePlan: async (id) => {

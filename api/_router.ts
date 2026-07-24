@@ -392,6 +392,20 @@ async function withdraw(req: ApiRequest): Promise<ApiResponse> {
   const transferId = genTransferId(uid);
   const bankEntry = resolveBank(bank.bank_name);
 
+  // Receipt shown to the user after the request is submitted.
+  const receiptBase = {
+    reference: transferId,
+    amount,
+    fee,
+    net,
+    wallet: walletKind,
+    bankName: bank.bank_name,
+    accountNumber: bank.account_number,
+    accountName: bank.account_name,
+    ts: Date.now(),
+  };
+  const receipt = (status: string) => ({ ...receiptBase, status });
+
   // Reserve funds up front (debit + PENDING payout + pending ledger row), atomic
   const reserved = await sql.begin(async (tx) => {
     if (walletKind === "sales") await tx`UPDATE users SET sales = sales - ${amount} WHERE id = ${uid}`;
@@ -412,12 +426,12 @@ async function withdraw(req: ApiRequest): Promise<ApiResponse> {
 
   if (!autoPayable) {
     // Manual queue (unsupported bank, over ceiling, or relay not configured). Funds reserved.
-    return ok({ status: "pending", user: await loadState(uid), transactions: await txList(uid) });
+    return ok({ status: "pending", receipt: receipt("pending"), user: await loadState(uid), transactions: await txList(uid) });
   }
 
   // Atomic claim PENDING -> SENT (blocks double dispatch)
   const claim = await sql`UPDATE payouts SET status = 'SENT' WHERE id = ${reserved.payoutId} AND status = 'PENDING' RETURNING id`;
-  if (claim.length === 0) return ok({ status: "pending", user: await loadState(uid), transactions: await txList(uid) });
+  if (claim.length === 0) return ok({ status: "pending", receipt: receipt("pending"), user: await loadState(uid), transactions: await txList(uid) });
 
   const res = await provider.payout({
     transferId,
@@ -445,7 +459,7 @@ async function withdraw(req: ApiRequest): Promise<ApiResponse> {
     await tx`UPDATE payouts SET status = ${paid ? "PAID" : "SENT"}, provider_ref = ${res.providerRef || ""}, provider_status = ${res.raw} WHERE id = ${reserved.payoutId}`;
     await tx`UPDATE transactions SET status = ${paid ? "completed" : "pending"} WHERE id = ${reserved.txId}`;
   });
-  return ok({ status: paid ? "success" : "processing", user: await loadState(uid), transactions: await txList(uid) });
+  return ok({ status: paid ? "success" : "processing", receipt: receipt(paid ? "success" : "processing"), user: await loadState(uid), transactions: await txList(uid) });
 }
 
 // Settle a SENT payout by trusting only the authenticated relay query (§5c).

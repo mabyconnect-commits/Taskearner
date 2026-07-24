@@ -3,8 +3,9 @@ import { ArrowUp, Landmark, Plus, Clock, Building2, Check, Loader2 } from "lucid
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Sheet } from "@/components/ui/Sheet";
-import { useStore } from "@/store/useStore";
+import { useStore, WithdrawReceipt as Receipt } from "@/store/useStore";
 import { SALES_WITHDRAW_MIN, planById, withdrawFee, withdrawNet, WITHDRAW_TAX_RATE, WITHDRAW_VAT } from "@/lib/data";
+import { WithdrawReceipt } from "@/components/WithdrawReceipt";
 import { formatNaira, timeAgo, maskAccount, maskName } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
@@ -18,6 +19,7 @@ export default function WalletPage() {
   const [bankSheet, setBankSheet] = useState(false);
   const [amt, setAmt] = useState("");
   const [busy, setBusy] = useState(false);
+  const [receipt, setReceipt] = useState<Receipt | null>(null);
 
   const balance = tab === "engagement" ? engagement : sales;
   // Engagement minimum depends on the active plan; sales is flat for all plans.
@@ -33,8 +35,13 @@ export default function WalletPage() {
     setBusy(true);
     const res = await withdraw(tab, Number(amt) || 0);
     setBusy(false);
-    toast(res.msg, res.ok ? "success" : "error");
-    if (res.ok) setAmt("");
+    if (res.ok) {
+      setAmt("");
+      if (res.receipt) setReceipt(res.receipt);
+      else toast(res.msg, "success");
+    } else {
+      toast(res.msg, "error");
+    }
   };
 
   return (
@@ -158,22 +165,32 @@ export default function WalletPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {payouts.map((t) => (
-            <div key={t.id} className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-soft dark:bg-white/[0.04]">
-              <div className="grid h-11 w-11 place-items-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20">
-                <Check className="h-5 w-5" />
+          {payouts.map((t) => {
+            const pending = t.status === "pending" || t.status === "processing";
+            return (
+              <div key={t.id} className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-soft dark:bg-white/[0.04]">
+                <div className={cn("grid h-11 w-11 place-items-center rounded-full",
+                  pending ? "bg-amber-100 text-amber-600 dark:bg-amber-500/20" : "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20")}>
+                  {pending ? <Clock className="h-5 w-5" /> : <Check className="h-5 w-5" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-bold">{t.title}</p>
+                  <p className="text-xs text-slate-400">{timeAgo(t.ts)} · {t.wallet}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <span className="block font-bold text-slate-700 dark:text-slate-200">{formatNaira(t.amount)}</span>
+                  <span className={cn("text-xs font-bold uppercase", pending ? "text-amber-500" : "text-emerald-500")}>
+                    {pending ? "Pending" : "Paid"}
+                  </span>
+                </div>
               </div>
-              <div className="flex-1">
-                <p className="font-bold">{t.title}</p>
-                <p className="text-xs text-slate-400">{timeAgo(t.ts)} · {t.wallet}</p>
-              </div>
-              <span className="font-bold text-slate-700 dark:text-slate-200">{formatNaira(t.amount)}</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
       <BankSheet open={bankSheet} onClose={() => setBankSheet(false)} onSave={async (b) => { const r = await addBank(b); toast(r.msg, r.ok ? "success" : "error"); if (r.ok) setBankSheet(false); }} banks={BANKS} />
+      {receipt && <WithdrawReceipt receipt={receipt} onClose={() => setReceipt(null)} />}
     </Layout>
   );
 }
