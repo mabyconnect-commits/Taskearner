@@ -298,7 +298,8 @@ async function fundInitiate(req: ApiRequest): Promise<ApiResponse> {
   });
   if (!created.ok && !created.instant) {
     console.error("[nekpay] create order failed:", created.message);
-    return err("Could not start payment. Please try again.");
+    // Surface NEKpay's actual reason so gateway config issues are diagnosable.
+    return err(`Could not start payment: ${created.message || "gateway rejected the request"}`);
   }
   // Store the credited amount (base) so the callback credits the wallet correctly.
   await sql`
@@ -546,6 +547,23 @@ async function getTransactions(req: ApiRequest): Promise<ApiResponse> {
 async function getReferrals(req: ApiRequest): Promise<ApiResponse> {
   const uid = requireAuth(req);
   return ok({ referrals: await referralList(uid) });
+}
+
+// Real affiliate leaderboard: top earners by sales-wallet balance.
+async function leaderboard(req: ApiRequest): Promise<ApiResponse> {
+  requireAuth(req);
+  const rows = await sql`
+    SELECT u.name, u.username, u.sales,
+      (SELECT count(*)::int FROM referrals r WHERE r.referrer_id = u.id AND r.status = 'activated') AS refs
+    FROM users u
+    WHERE u.sales > 0
+    ORDER BY u.sales DESC, refs DESC
+    LIMIT 20`;
+  return ok({
+    leaderboard: rows.map((u: any) => ({
+      name: u.name, handle: u.username, earned: num(u.sales), refs: u.refs,
+    })),
+  });
 }
 
 // Health check that actually probes the database and reports its status,
@@ -887,6 +905,7 @@ const routes: Record<string, Handler> = {
   "POST /bills/pay": payBill,
   "GET /transactions": getTransactions,
   "GET /referrals": getReferrals,
+  "GET /leaderboard": leaderboard,
   "GET /tasks": getTasks,
   "GET /sponsored": getSponsored,
   "POST /sponsored/apply": applySponsored,

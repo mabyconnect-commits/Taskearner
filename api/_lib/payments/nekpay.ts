@@ -93,12 +93,16 @@ export const nekpayProvider: PaymentProvider = {
 
     const data = await postForm(`${ENV.NEKPAY_API_URL}/pay/web`, params);
     const ok = data?.respCode === "SUCCESS" && String(data?.tradeResult) === "1" && !!data?.payInfo;
+    const reason =
+      `${data?.respCode || ""} ${data?.tradeMsg || data?.msg || data?.errorMsg || data?.message || ""}`.trim() ||
+      String(data?._rawText || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160) ||
+      "no response from gateway";
     return {
       ok,
       payUrl: ok ? String(data.payInfo) : "",
       providerRef: data?.orderNo !== undefined ? String(data.orderNo) : "",
       instant: false,
-      message: ok ? undefined : `${data?.respCode || ""} ${data?.tradeMsg || ""}`.trim(),
+      message: ok ? undefined : reason,
     };
   },
 
