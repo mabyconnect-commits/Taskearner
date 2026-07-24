@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Mail, Lock, User as UserIcon, ArrowLeft, Loader2 } from "lucide-react";
+import { Mail, Lock, User as UserIcon, ArrowLeft, Loader2, Eye, EyeOff } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { useToast } from "@/components/ui/Toast";
 import { Logo } from "@/components/Logo";
@@ -11,6 +11,7 @@ export default function Auth() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const { signup, login } = useStore();
   const nav = useNavigate();
@@ -65,7 +66,21 @@ export default function Auth() {
           <input className="input pl-11" placeholder="you@example.com" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </Field>
         <Field icon={<Lock className="h-5 w-5" />} label="Password">
-          <input className="input pl-11" placeholder="••••••••" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input
+            className="input pl-11 pr-12"
+            placeholder="••••••••"
+            type={showPw ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPw((v) => !v)}
+            aria-label={showPw ? "Hide password" : "Show password"}
+            className="absolute right-3 top-1/2 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+          >
+            {showPw ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+          </button>
         </Field>
 
         <button disabled={busy} className="btn-primary w-full py-4 text-lg">
