@@ -793,7 +793,13 @@ async function adminDepositQuery(req: ApiRequest): Promise<ApiResponse> {
   const provider = getProvider();
   try {
     const q = await provider.queryOrder(p.reference);
-    return ok({ reference: p.reference, detectedPaid: q.paid, amount: q.amount, raw: q.raw });
+    // If NEKpay confirms payment, credit immediately (idempotent).
+    let credited = false;
+    if (q.paid && p.status !== "paid") {
+      await creditDeposit(p.reference);
+      credited = true;
+    }
+    return ok({ reference: p.reference, detectedPaid: q.paid, credited, amount: q.amount, raw: q.raw });
   } catch (e: any) {
     return ok({ reference: p.reference, detectedPaid: false, error: String(e?.message || e).slice(0, 300) });
   }

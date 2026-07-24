@@ -207,9 +207,10 @@ function DepositsTab() {
   const check = async (id: string) => {
     setBusy(id);
     try {
-      const r = await api.adminDepositQuery({ id });
-      setProbe((m) => ({ ...m, [id]: JSON.stringify({ detectedPaid: r.detectedPaid, amount: r.amount, raw: r.raw, error: r.error }, null, 1) }));
-      toast(r.detectedPaid ? "NEKpay says PAID" : "NEKpay says not paid yet", r.detectedPaid ? "success" : "info");
+      const r: any = await api.adminDepositQuery({ id });
+      setProbe((m) => ({ ...m, [id]: JSON.stringify({ detectedPaid: r.detectedPaid, credited: r.credited, amount: r.amount, raw: r.raw, error: r.error }, null, 1) }));
+      if (r.credited) { toast("NEKpay confirmed — wallet credited ✅", "success"); reload(); }
+      else toast(r.detectedPaid ? "Already credited" : "NEKpay says not paid yet", r.detectedPaid ? "success" : "info");
     } catch (e: any) {
       toast(e?.message || "Failed", "error");
     } finally {

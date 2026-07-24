@@ -178,6 +178,8 @@ export const useStore = create<State>()(
                 const { user, transactions, referrals } = await api.me();
                 applyUser(user, transactions, referrals);
                 set({ mode, authed: true, booting: false });
+                // Credit any paid-but-pending deposits (safety net for missed callbacks).
+                get().reconcileDeposits();
                 return;
               } catch {
                 setToken("");
