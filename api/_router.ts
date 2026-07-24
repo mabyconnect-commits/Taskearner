@@ -288,14 +288,23 @@ async function fundInitiate(req: ApiRequest): Promise<ApiResponse> {
   }
 
   const [u] = await sql`SELECT email FROM users WHERE id = ${uid}`;
-  const mchOrderNo = genOrderNo();
-  const created = await provider.createOrder({
-    mchOrderNo,
-    amount: total, // charge base + 8% tax
-    email: u.email,
+
+  // Try up to twice with a fresh order number — ORDER_REQUEST_FAILED is often
+  // a transient gateway hiccup.
+  let mchOrderNo = genOrderNo();
+  let created = await provider.createOrder({
+    mchOrderNo, amount: total, email: u.email,
     notifyUrl: `${ENV.APP_URL}/api/deposits/nekpay/callback`,
     pageUrl: `${ENV.APP_URL}/deposit?ref=${mchOrderNo}`,
   });
+  if (!created.ok && !created.instant) {
+    mchOrderNo = genOrderNo();
+    created = await provider.createOrder({
+      mchOrderNo, amount: total, email: u.email,
+      notifyUrl: `${ENV.APP_URL}/api/deposits/nekpay/callback`,
+      pageUrl: `${ENV.APP_URL}/deposit?ref=${mchOrderNo}`,
+    });
+  }
   if (!created.ok && !created.instant) {
     console.error("[nekpay] create order failed:", created.message);
     // Surface NEKpay's actual reason so gateway config issues are diagnosable.
