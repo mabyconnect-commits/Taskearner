@@ -3,17 +3,30 @@ import { Mic, BookOpen, CheckCircle2, Camera, ChevronRight } from "lucide-react"
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useStore } from "@/store/useStore";
-import { planById, DAILY_TASKS, SPONSORED_POSTS } from "@/lib/data";
+import { planById } from "@/lib/data";
 import { formatNaira } from "@/lib/format";
 import { cn } from "@/lib/cn";
 
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function Earn() {
   const nav = useNavigate();
-  const { plan, cooldowns, completedTasks } = useStore();
+  const { plan, cooldowns, dailyUsed, dailyDate } = useStore();
   const p = planById(plan);
   const now = Date.now();
 
-  const tasksLeft = DAILY_TASKS.filter((t) => !completedTasks.includes(t.id)).length;
+  // remaining per activity today (caps reset daily)
+  const used = dailyDate === todayKey() ? dailyUsed : { voice: 0, word: 0, task: 0, post: 0 };
+  const left = {
+    voice: Math.max(0, p.daily.voice - used.voice),
+    word: Math.max(0, p.daily.word - used.word),
+    task: Math.max(0, p.daily.task - used.task),
+    post: Math.max(0, p.daily.post - used.post),
+  };
+  const voiceStatus = left.voice <= 0 ? "Done today" : cooldowns["voice"] && cooldowns["voice"] > now ? "Cooldown" : "Ready";
+  const wordStatus = left.word <= 0 ? "Done today" : cooldowns["word"] && cooldowns["word"] > now ? "Cooldown" : "Ready";
 
   const activities = [
     {
@@ -25,7 +38,7 @@ export default function Earn() {
       bg: "bg-brand-100 dark:bg-brand-500/20",
       fg: "text-brand-600 dark:text-brand-300",
       to: "/earn/voice",
-      status: cooldowns["voice"] && cooldowns["voice"] > now ? "Cooldown" : "Available",
+      status: voiceStatus,
     },
     {
       id: "word",
@@ -36,7 +49,7 @@ export default function Earn() {
       bg: "bg-emerald-100 dark:bg-emerald-500/20",
       fg: "text-emerald-500",
       to: "/earn/word-game",
-      status: cooldowns["word"] && cooldowns["word"] > now ? "Cooldown" : "Available",
+      status: wordStatus,
     },
     {
       id: "tasks",
@@ -47,7 +60,7 @@ export default function Earn() {
       bg: "bg-amber-100 dark:bg-amber-500/20",
       fg: "text-amber-500",
       to: "/earn/tasks",
-      status: `${tasksLeft} available`,
+      status: `${left.task} available`,
     },
     {
       id: "posts",
@@ -58,7 +71,7 @@ export default function Earn() {
       bg: "bg-rose-100 dark:bg-rose-500/20",
       fg: "text-rose-500",
       to: "/earn/sponsored",
-      status: `${SPONSORED_POSTS.length} available`,
+      status: `${left.post} available`,
     },
   ];
 

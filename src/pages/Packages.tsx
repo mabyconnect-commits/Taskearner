@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Mic, Gamepad2, Megaphone, CheckCircle2, Infinity as Inf, Plus, Crown, Check } from "lucide-react";
+import { Mic, Gamepad2, Megaphone, CheckCircle2, Infinity as Inf, Plus, Crown, Check, Users } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useStore } from "@/store/useStore";
@@ -73,7 +73,8 @@ export default function Packages() {
                 <Row icon={<Mic className="h-4 w-4" />} color="text-brand-500" amount={p.perVoice} label="per Voice Earn session" />
                 <Row icon={<Gamepad2 className="h-4 w-4" />} color="text-brand-500" amount={p.perWord} label="per Word Game" />
                 <Row icon={<Megaphone className="h-4 w-4" />} color="text-amber-500" amount={p.perPost} label="per Sponsored Post" />
-                <Row icon={<CheckCircle2 className="h-4 w-4" />} color="text-emerald-500" amount={p.perTask} label="per Task" last />
+                <Row icon={<CheckCircle2 className="h-4 w-4" />} color="text-emerald-500" amount={p.perTask} label="per Task" />
+                <Row icon={<Users className="h-4 w-4" />} color="text-indigo-500" amount={p.commission} label="per activated Sale" last />
 
                 <button
                   onClick={() => onActivate(p.id)}

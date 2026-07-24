@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { ensureSchema, sql, num } from "./_lib/db";
 import { ApiRequest, ApiResponse, HttpError, ok, err, textResp } from "./_lib/http";
 import { comparePassword, hashPassword, requireAuth, signToken } from "./_lib/auth";
-import { PLANS, planOf, WITHDRAW_MIN, COOLDOWN_MS } from "./_lib/plans";
+import { PLANS, planOf, WITHDRAW_MIN, SALES_WITHDRAW_MIN, COOLDOWN_MS, WORD_ROUNDS, dailyMax, utcDay } from "./_lib/plans";
 import { loadState, serializeUser } from "./_lib/state";
 import { getProvider } from "./_lib/payments";
 import { resolveBank, isInstantPayable } from "./_lib/payments/banks";
@@ -143,37 +143,62 @@ async function earn(req: ApiRequest): Promise<ApiResponse> {
   const cooldowns: Record<string, number> = u.cooldowns ?? {};
   const completed = u.completed ?? { tasks: [], posts: [] };
 
+  // Daily usage: reset when the UTC day changes.
+  const today = utcDay();
+  const rawDaily = u.daily ?? {};
+  const daily: { date: string; earned: number; voice: number; word: number; task: number; post: number } =
+    rawDaily.date === today
+      ? { date: today, earned: num(rawDaily.earned), voice: rawDaily.voice ?? 0, word: rawDaily.word ?? 0, task: rawDaily.task ?? 0, post: rawDaily.post ?? 0 }
+      : { date: today, earned: 0, voice: 0, word: 0, task: 0, post: 0 };
+
+  const capFor = (k: "voice" | "word" | "task" | "post") => plan.daily[k];
+  const usedFor = (k: "voice" | "word" | "task" | "post") => daily[k];
+
   let amount = 0;
   let title = "";
   const type = kind;
+  const kindKey = kind as "voice" | "word" | "task" | "post";
 
   if (kind === "voice") {
     if ((cooldowns.voice ?? 0) > now) return err("This activity is cooling down", 429);
+    if (usedFor("voice") >= capFor("voice")) return err("You've completed today's Voice Earn. Come back tomorrow!", 429);
     amount = plan.perVoice; title = "Voice Earn session completed";
     cooldowns.voice = now + COOLDOWN_MS;
   } else if (kind === "word") {
     if ((cooldowns.word ?? 0) > now) return err("This activity is cooling down", 429);
-    const count = Math.max(1, Math.min(10, Math.floor(Number(req.body?.count) || 1)));
+    if (usedFor("word") >= capFor("word")) return err("You've hit today's Word Game limit. Come back tomorrow!", 429);
+    const count = Math.max(1, Math.min(WORD_ROUNDS, Math.floor(Number(req.body?.count) || 1)));
     amount = plan.perWord * count; title = "Word Game completed";
     cooldowns.word = now + COOLDOWN_MS;
   } else if (kind === "task") {
     if (!refId) return err("Missing task id");
     if (completed.tasks.includes(refId)) return err("Task already completed", 409);
+    if (usedFor("task") >= capFor("task")) return err("You've reached today's task limit for your plan.", 429);
     amount = plan.perTask; title = "Daily task completed";
     completed.tasks = [...completed.tasks, refId];
   } else if (kind === "post") {
     if (!refId) return err("Missing post id");
     if (completed.posts.includes(refId)) return err("Post already shared", 409);
+    if (usedFor("post") >= capFor("post")) return err("You've reached today's sponsored-post limit for your plan.", 429);
     amount = plan.perPost; title = "Sponsored post shared";
     completed.posts = [...completed.posts, refId];
   } else {
     return err("Unknown activity");
   }
 
+  // Enforce the plan's daily earning ceiling — never pay beyond expected funds.
+  const ceiling = dailyMax(plan);
+  const remaining = Math.max(0, ceiling - daily.earned);
+  if (remaining <= 0) return err("You've reached today's earning limit for your plan.", 429);
+  amount = Math.min(amount, remaining);
+
+  daily.earned += amount;
+  daily[kindKey] += 1;
+
   await sql.begin(async (tx) => {
     await tx`
       UPDATE users SET engagement = engagement + ${amount},
-        cooldowns = ${tx.json(cooldowns)}, completed = ${tx.json(completed)}
+        cooldowns = ${tx.json(cooldowns)}, completed = ${tx.json(completed)}, daily = ${tx.json(daily)}
       WHERE id = ${uid}`;
     await tx`
       INSERT INTO transactions (user_id, type, title, amount, wallet)
@@ -329,7 +354,8 @@ async function withdraw(req: ApiRequest): Promise<ApiResponse> {
   const [u] = await sql`SELECT * FROM users WHERE id = ${uid}`;
   const [bank] = await sql`SELECT * FROM banks WHERE user_id = ${uid}`;
   if (!bank) return err("Add a payout bank account first");
-  if (amount < WITHDRAW_MIN) return err(`Minimum withdrawal is ₦${WITHDRAW_MIN.toLocaleString()}`);
+  const minWithdraw = walletKind === "sales" ? SALES_WITHDRAW_MIN : WITHDRAW_MIN;
+  if (amount < minWithdraw) return err(`Minimum withdrawal is ₦${minWithdraw.toLocaleString()}`);
   const balance = walletKind === "sales" ? num(u.sales) : num(u.engagement);
   if (amount > balance) return err("Insufficient balance in this wallet");
 

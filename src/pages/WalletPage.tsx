@@ -4,7 +4,7 @@ import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Sheet } from "@/components/ui/Sheet";
 import { useStore } from "@/store/useStore";
-import { WITHDRAW_MIN } from "@/lib/data";
+import { WITHDRAW_MIN, SALES_WITHDRAW_MIN } from "@/lib/data";
 import { formatNaira, timeAgo, maskAccount, maskName } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
@@ -20,6 +20,7 @@ export default function WalletPage() {
   const [busy, setBusy] = useState(false);
 
   const balance = tab === "engagement" ? engagement : sales;
+  const minWithdraw = tab === "sales" ? SALES_WITHDRAW_MIN : WITHDRAW_MIN;
   const payouts = transactions.filter((t) => t.type === "withdraw");
   const totalWithdrawn = payouts.reduce((s, t) => s + Math.abs(t.amount), 0);
 
@@ -73,7 +74,7 @@ export default function WalletPage() {
       <div className="mt-6 text-center">
         <p className="text-sm font-semibold capitalize text-slate-400">{tab} balance</p>
         <p className="font-display text-5xl font-extrabold">{formatNaira(balance)}</p>
-        <p className="mt-1 text-sm text-slate-400">Minimum: {formatNaira(WITHDRAW_MIN)}</p>
+        <p className="mt-1 text-sm text-slate-400">Minimum: {formatNaira(minWithdraw)}</p>
       </div>
 
       {/* bank / withdraw */}
@@ -100,8 +101,8 @@ export default function WalletPage() {
               placeholder="0"
             />
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <button onClick={() => setAmt(String(WITHDRAW_MIN))} className="btn-ghost py-3 text-sm">
-                Min · {formatNaira(WITHDRAW_MIN, false)}
+              <button onClick={() => setAmt(String(minWithdraw))} className="btn-ghost py-3 text-sm">
+                Min · {formatNaira(minWithdraw, false)}
               </button>
               <button onClick={() => setAmt(String(Math.floor(balance)))} className="btn-ghost py-3 text-sm">
                 Max · {formatNaira(balance, false)}
@@ -110,7 +111,7 @@ export default function WalletPage() {
             <button onClick={submitWithdraw} disabled={busy || Number(amt) <= 0} className="btn-primary mt-4 w-full py-4 text-lg">
               {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><ArrowUp className="h-5 w-5" /> Request Withdrawal</>}
             </button>
-            <p className="mt-2 text-center text-xs text-slate-400">Minimum {formatNaira(WITHDRAW_MIN)} · Payout within 24h</p>
+            <p className="mt-2 text-center text-xs text-slate-400">Minimum {formatNaira(minWithdraw)} · Payout within 24h</p>
           </div>
         </>
       ) : (

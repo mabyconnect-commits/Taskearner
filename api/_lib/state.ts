@@ -1,5 +1,6 @@
 import { sql, num } from "./db";
 import { HttpError } from "./http";
+import { planOf, dailyMax, utcDay } from "./plans";
 
 export interface Bank {
   bankName: string;
@@ -21,9 +22,24 @@ export interface UserState {
   completed: { tasks: string[]; posts: string[] };
   cooldowns: Record<string, number>;
   bank: Bank | null;
+  // daily earning limits for the user's plan
+  dailyMax: number;
+  dailyEarned: number;
+  dailyCaps: { voice: number; word: number; task: number; post: number };
+  dailyUsed: { voice: number; word: number; task: number; post: number };
 }
 
 export function serializeUser(u: any, bank?: any): UserState {
+  const plan = planOf(u.plan);
+  const today = utcDay();
+  const rawDaily = u.daily ?? {};
+  const fresh = rawDaily.date === today;
+  const used = {
+    voice: fresh ? rawDaily.voice ?? 0 : 0,
+    word: fresh ? rawDaily.word ?? 0 : 0,
+    task: fresh ? rawDaily.task ?? 0 : 0,
+    post: fresh ? rawDaily.post ?? 0 : 0,
+  };
   return {
     id: u.id,
     name: u.name,
@@ -40,6 +56,10 @@ export function serializeUser(u: any, bank?: any): UserState {
     bank: bank
       ? { bankName: bank.bank_name, accountNumber: bank.account_number, accountName: bank.account_name }
       : null,
+    dailyMax: dailyMax(plan),
+    dailyEarned: fresh ? num(rawDaily.earned) : 0,
+    dailyCaps: plan.daily,
+    dailyUsed: used,
   };
 }
 

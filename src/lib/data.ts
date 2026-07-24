@@ -1,5 +1,14 @@
 export type PlanId = "free" | "lite" | "starter" | "pro" | "elite" | "prime";
 
+export const WORD_ROUNDS = 2;
+
+export interface DailyCaps {
+  voice: number;
+  word: number;
+  task: number;
+  post: number;
+}
+
 export interface Plan {
   id: PlanId;
   name: string;
@@ -9,8 +18,13 @@ export interface Plan {
   perWord: number;
   perPost: number;
   perTask: number;
+  daily: DailyCaps;
   tagline: string;
   popular?: boolean;
+}
+
+export function planDailyMax(p: Plan): number {
+  return p.daily.voice * p.perVoice + p.daily.word * p.perWord * WORD_ROUNDS + p.daily.task * p.perTask + p.daily.post * p.perPost;
 }
 
 export const PLANS: Plan[] = [
@@ -23,6 +37,7 @@ export const PLANS: Plan[] = [
     perWord: 60,
     perPost: 50,
     perTask: 30,
+    daily: { voice: 1, word: 1, task: 5, post: 3 },
     tagline: "Dip your toes in and start earning.",
   },
   {
@@ -34,6 +49,7 @@ export const PLANS: Plan[] = [
     perWord: 140,
     perPost: 110,
     perTask: 60,
+    daily: { voice: 1, word: 1, task: 8, post: 4 },
     tagline: "A solid step up for daily earners.",
   },
   {
@@ -45,6 +61,7 @@ export const PLANS: Plan[] = [
     perWord: 240,
     perPost: 180,
     perTask: 100,
+    daily: { voice: 1, word: 2, task: 12, post: 6 },
     tagline: "For creators who show up every day.",
     popular: true,
   },
@@ -57,6 +74,7 @@ export const PLANS: Plan[] = [
     perWord: 320,
     perPost: 210,
     perTask: 130,
+    daily: { voice: 1, word: 2, task: 18, post: 8 },
     tagline: "Premium rates, faster payouts.",
   },
   {
@@ -68,6 +86,7 @@ export const PLANS: Plan[] = [
     perWord: 400,
     perPost: 250,
     perTask: 150,
+    daily: { voice: 1, word: 2, task: 26, post: 21 },
     tagline: "The highest earning tier. Pay once, earn forever.",
   },
 ];
@@ -81,6 +100,7 @@ export const FREE_PLAN: Plan = {
   perWord: 0,
   perPost: 0,
   perTask: 0,
+  daily: { voice: 0, word: 0, task: 0, post: 0 },
   tagline: "Activate a plan to start earning.",
 };
 
@@ -88,7 +108,8 @@ export function planById(id: PlanId): Plan {
   return PLANS.find((p) => p.id === id) ?? FREE_PLAN;
 }
 
-export const WITHDRAW_MIN = 45000;
+export const WITHDRAW_MIN = 45000; // engagement wallet
+export const SALES_WITHDRAW_MIN = 1000; // sales/affiliate wallet
 
 export interface VoiceLang {
   key: string;

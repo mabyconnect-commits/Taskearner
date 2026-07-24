@@ -58,6 +58,10 @@ export interface ServerUser {
   completed: { tasks: string[]; posts: string[] };
   cooldowns: Record<string, number>;
   bank: { bankName: string; accountNumber: string; accountName: string } | null;
+  dailyMax: number;
+  dailyEarned: number;
+  dailyCaps: { voice: number; word: number; task: number; post: number };
+  dailyUsed: { voice: number; word: number; task: number; post: number };
 }
 
 export const api = {

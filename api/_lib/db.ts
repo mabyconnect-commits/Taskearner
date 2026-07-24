@@ -40,6 +40,7 @@ export async function ensureSchema(): Promise<void> {
         deposit       numeric(14,2) NOT NULL DEFAULT 0,
         completed     jsonb NOT NULL DEFAULT '{"tasks":[],"posts":[]}'::jsonb,
         cooldowns     jsonb NOT NULL DEFAULT '{}'::jsonb,
+        daily         jsonb NOT NULL DEFAULT '{}'::jsonb,
         referred_by   uuid REFERENCES users(id),
         created_at    timestamptz NOT NULL DEFAULT now()
       );
@@ -113,6 +114,7 @@ export async function ensureSchema(): Promise<void> {
     await sql`ALTER TABLE payouts ADD COLUMN IF NOT EXISTS provider_ref text NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE payouts ADD COLUMN IF NOT EXISTS provider_status text NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE payouts ADD COLUMN IF NOT EXISTS tx_id uuid`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily jsonb NOT NULL DEFAULT '{}'::jsonb`;
   })();
   // Cache the in-flight promise so concurrent requests share it, but if it
   // rejects (e.g. DB briefly unreachable on a cold start), clear the cache so

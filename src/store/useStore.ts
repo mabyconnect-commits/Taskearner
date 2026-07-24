@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { PlanId, planById, WITHDRAW_MIN, COOLDOWN_MS } from "@/lib/data";
+import { PlanId, planById, planDailyMax, WITHDRAW_MIN, SALES_WITHDRAW_MIN, COOLDOWN_MS } from "@/lib/data";
 import { api, ApiError, getToken, setToken, ServerUser } from "@/lib/api";
 
 export type TxType = "voice" | "word" | "task" | "post" | "fund" | "withdraw" | "plan" | "commission" | "bill";
@@ -50,6 +50,9 @@ interface State {
   completedTasks: string[];
   completedPosts: string[];
   cooldowns: Record<string, number>;
+  dailyDate: string;
+  dailyEarned: number;
+  dailyUsed: { voice: number; word: number; task: number; post: number };
 
   boot: () => Promise<void>;
   setTheme: (t: "light" | "dark") => void;
@@ -75,6 +78,9 @@ interface State {
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
+}
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
 }
 function tx(type: TxType, title: string, amount: number, wallet: Transaction["wallet"]): Transaction {
   return { id: uid(), type, title, amount, wallet, ts: Date.now() };
@@ -102,6 +108,9 @@ export const useStore = create<State>()(
           completedTasks: user.completed?.tasks ?? [],
           completedPosts: user.completed?.posts ?? [],
           cooldowns: user.cooldowns ?? {},
+          dailyDate: todayKey(),
+          dailyEarned: user.dailyEarned ?? 0,
+          dailyUsed: user.dailyUsed ?? { voice: 0, word: 0, task: 0, post: 0 },
           transactions: transactions ? mapTx(transactions) : s.transactions,
           referrals: referrals ? mapRefs(referrals) : s.referrals,
         }));
@@ -133,6 +142,9 @@ export const useStore = create<State>()(
         completedTasks: [],
         completedPosts: [],
         cooldowns: {},
+        dailyDate: todayKey(),
+        dailyEarned: 0,
+        dailyUsed: { voice: 0, word: 0, task: 0, post: 0 },
 
         boot: async () => {
           let mode: Mode = "offline";
@@ -239,6 +251,14 @@ export const useStore = create<State>()(
           if (s.plan === "free") return { ok: false, msg: "Activate a plan to start earning" };
           const p = planById(s.plan);
           const now = Date.now();
+
+          // daily usage (reset on new day)
+          const day = todayKey();
+          const fresh = s.dailyDate === day;
+          const used = fresh ? { ...s.dailyUsed } : { voice: 0, word: 0, task: 0, post: 0 };
+          const earnedToday = fresh ? s.dailyEarned : 0;
+          if (used[kind] >= p.daily[kind]) return { ok: false, msg: "You've reached today's limit for this activity." };
+
           let amount = 0;
           let title = "";
           let type: TxType = kind;
@@ -256,9 +276,19 @@ export const useStore = create<State>()(
             if (!refId || s.completedPosts.includes(refId)) return { ok: false, msg: "Already shared" };
             amount = p.perPost; title = "Sponsored post shared"; type = "post";
           }
+
+          // enforce the plan's daily earning ceiling
+          const remaining = Math.max(0, planDailyMax(p) - earnedToday);
+          if (remaining <= 0) return { ok: false, msg: "You've reached today's earning limit for your plan." };
+          amount = Math.min(amount, remaining);
+          used[kind] += 1;
+
           set((st) => ({
             engagement: st.engagement + amount,
             cooldowns,
+            dailyDate: day,
+            dailyEarned: earnedToday + amount,
+            dailyUsed: used,
             completedTasks: kind === "task" && refId ? [...st.completedTasks, refId] : st.completedTasks,
             completedPosts: kind === "post" && refId ? [...st.completedPosts, refId] : st.completedPosts,
             transactions: [tx(type, title, amount, "engagement"), ...st.transactions].slice(0, 60),
@@ -315,7 +345,8 @@ export const useStore = create<State>()(
           const s = get();
           if (!s.bank) return { ok: false, msg: "Add a payout bank account first." };
           const bal = wallet === "engagement" ? s.engagement : s.sales;
-          if (amount < WITHDRAW_MIN) return { ok: false, msg: `Minimum withdrawal is ₦${WITHDRAW_MIN.toLocaleString()}.` };
+          const min = wallet === "sales" ? SALES_WITHDRAW_MIN : WITHDRAW_MIN;
+          if (amount < min) return { ok: false, msg: `Minimum withdrawal is ₦${min.toLocaleString()}.` };
           if (amount > bal) return { ok: false, msg: "Insufficient balance in this wallet." };
           set((st) => ({
             [wallet]: bal - amount,
@@ -466,6 +497,9 @@ export const useStore = create<State>()(
         completedTasks: s.completedTasks,
         completedPosts: s.completedPosts,
         cooldowns: s.cooldowns,
+        dailyDate: s.dailyDate,
+        dailyEarned: s.dailyEarned,
+        dailyUsed: s.dailyUsed,
       }),
     },
   ),
