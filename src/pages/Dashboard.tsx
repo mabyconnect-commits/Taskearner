@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Menu, Bell, Smartphone, Wifi, Zap, Tv, Crown, X, Mic, Gamepad2, CheckCircle2, Megaphone,
-  ArrowRight, Share2, Copy, Check, ArrowUp, Users, TrendingUp,
+  ArrowRight, Share2, Copy, Check, ArrowUp, Users, TrendingUp, Lock, Trophy, Rocket, ChevronRight, MonitorSmartphone,
 } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { greeting, formatNaira } from "@/lib/format";
@@ -10,6 +10,7 @@ import { planById } from "@/lib/data";
 import { Layout } from "@/components/Layout";
 import { Drawer } from "@/components/Drawer";
 import { WalletCards } from "@/components/WalletCards";
+import { Sheet } from "@/components/ui/Sheet";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 
@@ -36,6 +37,7 @@ export default function Dashboard() {
   const [drawer, setDrawer] = useState(false);
   const [showBanner, setShowBanner] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [topClub, setTopClub] = useState(false);
   const first = name?.split(" ")[0] || "Star";
 
   // --- setup steps (next step to start earning) ---
@@ -264,14 +266,70 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* floating upgrade */}
+      {/* shortcut cards */}
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <button onClick={() => nav("/earn")} className="card flex items-center gap-3 p-4 text-left transition active:scale-[0.98]">
+          <MonitorSmartphone className="h-6 w-6 shrink-0 text-brand-600 dark:text-brand-300" />
+          <div className="min-w-0">
+            <p className="font-bold leading-tight">Ways to earn</p>
+            <p className="text-xs text-slate-400">4 activities</p>
+          </div>
+        </button>
+        <button onClick={() => nav("/leaderboard")} className="card flex items-center gap-3 p-4 text-left transition active:scale-[0.98]">
+          <Trophy className="h-6 w-6 shrink-0 text-brand-600 dark:text-brand-300" />
+          <div className="min-w-0">
+            <p className="font-bold leading-tight">Star earners</p>
+            <p className="text-xs text-slate-400">Top 10 this week</p>
+          </div>
+        </button>
+      </div>
+
+      {/* move to a higher plan */}
+      <button onClick={() => nav("/packages")} className="mt-4 flex w-full items-center gap-4 overflow-hidden rounded-4xl bg-gradient-to-br from-ink-800 via-ink-900 to-ink-950 p-5 text-left text-white shadow-card">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-brand-500 text-slate-900"><Rocket className="h-6 w-6" /></span>
+        <div className="flex-1">
+          <p className="font-display text-lg font-bold">Move to a higher plan</p>
+          <p className="text-sm text-white/60">Bigger rewards per session, task & referral — upgrade anytime</p>
+        </div>
+        <ChevronRight className="h-5 w-5 text-brand-400" />
+      </button>
+
+      {/* floating crown → Top Earner Club */}
       <button
-        onClick={() => nav("/packages")}
+        onClick={() => setTopClub(true)}
         className="fixed bottom-28 right-[max(16px,calc(50%-224px+16px))] z-30 grid h-14 w-14 place-items-center rounded-full bg-brand-500 text-slate-900 shadow-glow transition active:scale-90"
-        aria-label="Upgrade plan"
+        aria-label="Top Earner Club"
       >
         <Crown className="h-6 w-6" />
       </button>
+
+      <Sheet open={topClub} onClose={() => setTopClub(false)}>
+        <div className="-mx-5 -mb-8 overflow-hidden rounded-t-4xl bg-gradient-to-b from-[#2a1e05] via-ink-900 to-ink-950 px-6 pb-9 pt-2 text-center text-white">
+          <span className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold uppercase tracking-widest text-brand-400 ring-1 ring-brand-500/40">
+            🔒 Top Earner Club 🔒
+          </span>
+          <div className="relative mx-auto mt-5 w-fit">
+            <Crown className="absolute -top-4 left-1/2 h-8 w-8 -translate-x-1/2 text-brand-400" fill="currentColor" />
+            <div className="grid h-32 w-32 place-items-center rounded-full bg-brand-50 ring-4 ring-brand-500/70">
+              <Lock className="h-14 w-14 text-brand-600" />
+            </div>
+          </div>
+          <h2 className="mt-5 font-display text-3xl font-extrabold">Become a Top Earner</h2>
+          <p className="mt-2 text-xs font-bold uppercase tracking-widest text-brand-400/80">Special design locked</p>
+          <p className="mx-auto mt-3 max-w-xs text-sm text-white/70">
+            Reach the Top 15 and unlock a premium gold flyer made just for you — with your name and your total.
+          </p>
+          <div className="mx-auto mt-5 max-w-xs rounded-2xl p-4 ring-2 ring-brand-500/50">
+            <p className="text-xs font-semibold uppercase tracking-widest text-white/50">Your special flyer</p>
+            <p className="mt-1 font-display text-3xl font-extrabold text-brand-400">Locked</p>
+          </div>
+          <p className="mt-4 text-sm text-white/70">Refer more people to climb the leaderboard</p>
+          <button onClick={() => { setTopClub(false); nav("/sales"); }} className="btn-primary mt-4 w-full py-4 text-lg">
+            <Users className="h-5 w-5" /> Refer & climb
+          </button>
+          <p className="mt-4 font-display font-extrabold">Task<span className="text-brand-400">Earner</span> <span className="text-sm font-medium text-white/50">· your voice is currency</span></p>
+        </div>
+      </Sheet>
     </Layout>
   );
 }
