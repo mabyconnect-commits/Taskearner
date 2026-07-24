@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  LogOut, Camera, Crown, User as UserIcon, Building2, Share2, Lock, Receipt, Headphones, ChevronRight, Check,
+  LogOut, Camera, Crown, User as UserIcon, Building2, Share2, Lock, Receipt, Headphones, ChevronRight, Check, Shield,
 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { Sheet } from "@/components/ui/Sheet";
@@ -13,7 +13,7 @@ import { cn } from "@/lib/cn";
 export default function Profile() {
   const nav = useNavigate();
   const toast = useToast();
-  const { name, username, email, phone, plan, bank, socialLinked, linkSocial, updateProfile, logout } = useStore();
+  const { name, username, email, phone, plan, bank, socialLinked, isAdmin, linkSocial, updateProfile, logout } = useStore();
   const [editSheet, setEditSheet] = useState(false);
   const [n, setN] = useState(name);
   const [p, setP] = useState(phone);
@@ -24,6 +24,9 @@ export default function Profile() {
   const planName = planById(plan).name;
 
   const rows = [
+    ...(isAdmin
+      ? [{ icon: Shield, title: "Admin Dashboard", sub: "Activities, tasks, payouts, posts", onClick: () => nav("/admin"), badge: { text: "Admin", ok: true } as const }]
+      : []),
     { icon: UserIcon, title: "Personal Info", sub: "Name, phone, email", onClick: () => setEditSheet(true), badge: null },
     { icon: Building2, title: "Bank Account", sub: "Add your payout bank", onClick: () => nav("/wallet"), badge: bank ? { text: "Linked", ok: true } : { text: "Required", ok: false } },
     { icon: Share2, title: "Social Accounts", sub: "For sponsored post tasks", onClick: async () => { if (!socialLinked) { const r = await linkSocial(); toast(r.msg, r.ok ? "success" : "error"); } }, badge: socialLinked ? { text: "Linked", ok: true } : { text: "Link", ok: false } },
