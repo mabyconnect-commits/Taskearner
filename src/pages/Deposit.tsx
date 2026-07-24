@@ -5,6 +5,7 @@ import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Sheet } from "@/components/ui/Sheet";
 import { useStore } from "@/store/useStore";
+import { depositTax, depositTotal, DEPOSIT_TAX_RATE } from "@/lib/data";
 import { formatNaira } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
@@ -20,6 +21,8 @@ export default function Deposit() {
   const [pay, setPay] = useState(false);
   const [stage, setStage] = useState<"pay" | "processing" | "done">("pay");
   const n = Number(amt) || 0;
+  const tax = depositTax(n);
+  const total = depositTotal(n);
 
   // Handle the redirect back from NekPay: /deposit?ref=<reference>
   useEffect(() => {
@@ -111,16 +114,24 @@ export default function Deposit() {
       <Sheet open={pay} onClose={() => stage !== "processing" && setPay(false)} title={stage === "done" ? undefined : "Confirm payment"}>
         {stage === "pay" && (
           <div>
-            <div className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400">Amount</span>
-                <span className="font-display text-2xl font-extrabold">{formatNaira(n)}</span>
+            <div className="space-y-2.5 rounded-2xl bg-slate-50 p-4 dark:bg-white/5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-400">Wallet credit</span>
+                <span className="font-semibold">{formatNaira(n)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-400">Tax ({Math.round(DEPOSIT_TAX_RATE * 100)}%)</span>
+                <span className="font-semibold">{formatNaira(tax)}</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between border-t border-slate-200 pt-2.5 dark:border-white/10">
+                <span className="font-semibold text-slate-500">Total to pay</span>
+                <span className="font-display text-2xl font-extrabold">{formatNaira(total)}</span>
               </div>
             </div>
             <p className="mt-3 flex items-center gap-2 text-sm text-slate-400">
-              <Wallet className="h-4 w-4" /> Paying with MevonPay (secure demo gateway)
+              <Wallet className="h-4 w-4" /> {formatNaira(n)} lands in your wallet · {formatNaira(tax)} tax
             </p>
-            <button onClick={confirm} className="btn-primary mt-4 w-full py-4">Pay {formatNaira(n)}</button>
+            <button onClick={confirm} className="btn-primary mt-4 w-full py-4">Pay {formatNaira(total)}</button>
           </div>
         )}
         {stage === "processing" && (

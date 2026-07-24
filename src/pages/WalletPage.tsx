@@ -4,7 +4,7 @@ import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Sheet } from "@/components/ui/Sheet";
 import { useStore } from "@/store/useStore";
-import { WITHDRAW_MIN, SALES_WITHDRAW_MIN } from "@/lib/data";
+import { SALES_WITHDRAW_MIN, planById, withdrawFee, withdrawNet, WITHDRAW_TAX_RATE, WITHDRAW_VAT } from "@/lib/data";
 import { formatNaira, timeAgo, maskAccount, maskName } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
@@ -13,14 +13,18 @@ const BANKS = ["Access Bank", "GTBank", "Zenith Bank", "UBA", "First Bank", "Kud
 
 export default function WalletPage() {
   const toast = useToast();
-  const { engagement, sales, bank, addBank, withdraw, transactions } = useStore();
+  const { engagement, sales, bank, addBank, withdraw, transactions, plan } = useStore();
   const [tab, setTab] = useState<"engagement" | "sales">("engagement");
   const [bankSheet, setBankSheet] = useState(false);
   const [amt, setAmt] = useState("");
   const [busy, setBusy] = useState(false);
 
   const balance = tab === "engagement" ? engagement : sales;
-  const minWithdraw = tab === "sales" ? SALES_WITHDRAW_MIN : WITHDRAW_MIN;
+  // Engagement minimum depends on the active plan; sales is flat for all plans.
+  const minWithdraw = tab === "sales" ? SALES_WITHDRAW_MIN : planById(plan).minWithdraw;
+  const amtNum = Number(amt) || 0;
+  const fee = amtNum > 0 ? withdrawFee(amtNum) : 0;
+  const net = amtNum > 0 ? withdrawNet(amtNum) : 0;
   const payouts = transactions.filter((t) => t.type === "withdraw");
   const totalWithdrawn = payouts.reduce((s, t) => s + Math.abs(t.amount), 0);
 
@@ -108,10 +112,26 @@ export default function WalletPage() {
                 Max · {formatNaira(balance, false)}
               </button>
             </div>
+            {amtNum > 0 && (
+              <div className="mt-4 space-y-2 rounded-2xl bg-slate-50 p-4 dark:bg-white/5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-400">Amount</span>
+                  <span className="font-semibold">{formatNaira(amtNum)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-400">Tax ({(WITHDRAW_TAX_RATE * 100).toFixed(1)}%) + {formatNaira(WITHDRAW_VAT)} VAT</span>
+                  <span className="font-semibold text-rose-500">-{formatNaira(fee)}</span>
+                </div>
+                <div className="mt-1 flex items-center justify-between border-t border-slate-200 pt-2 dark:border-white/10">
+                  <span className="font-semibold text-slate-500">You receive</span>
+                  <span className="font-display text-xl font-extrabold text-emerald-600 dark:text-emerald-400">{formatNaira(net)}</span>
+                </div>
+              </div>
+            )}
             <button onClick={submitWithdraw} disabled={busy || Number(amt) <= 0} className="btn-primary mt-4 w-full py-4 text-lg">
               {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><ArrowUp className="h-5 w-5" /> Request Withdrawal</>}
             </button>
-            <p className="mt-2 text-center text-xs text-slate-400">Minimum {formatNaira(minWithdraw)} · Payout within 24h</p>
+            <p className="mt-2 text-center text-xs text-slate-400">Minimum {formatNaira(minWithdraw)} · {(WITHDRAW_TAX_RATE * 100).toFixed(1)}% tax + {formatNaira(WITHDRAW_VAT)} VAT · Payout within 24h</p>
           </div>
         </>
       ) : (

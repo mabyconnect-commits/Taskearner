@@ -76,6 +76,11 @@ export default function Packages() {
                 <Row icon={<CheckCircle2 className="h-4 w-4" />} color="text-emerald-500" amount={p.perTask} label="per Task" />
                 <Row icon={<Users className="h-4 w-4" />} color="text-indigo-500" amount={p.commission} label="per activated Sale" last />
 
+                <div className="mt-3 flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm dark:bg-white/5">
+                  <span className="font-semibold text-slate-500">Min. engagement withdrawal</span>
+                  <span className="font-display font-extrabold">{formatNaira(p.minWithdraw, false)}</span>
+                </div>
+
                 <button
                   onClick={() => onActivate(p.id)}
                   disabled={isCurrent || lowerTier}

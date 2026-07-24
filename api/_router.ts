@@ -2,11 +2,15 @@ import crypto from "node:crypto";
 import { ensureSchema, sql, num } from "./_lib/db";
 import { ApiRequest, ApiResponse, HttpError, ok, err, textResp } from "./_lib/http";
 import { comparePassword, hashPassword, requireAuth, signToken } from "./_lib/auth";
-import { PLANS, planOf, WITHDRAW_MIN, SALES_WITHDRAW_MIN, COOLDOWN_MS, WORD_ROUNDS, dailyMax, utcDay } from "./_lib/plans";
+import { PLANS, planOf, SALES_WITHDRAW_MIN, COOLDOWN_MS, WORD_ROUNDS, dailyMax, utcDay, depositTax, depositTotal, withdrawFee, withdrawNet } from "./_lib/plans";
 import { loadState, serializeUser, isAdminEmail } from "./_lib/state";
 import { getProvider } from "./_lib/payments";
 import { resolveBank, isInstantPayable } from "./_lib/payments/banks";
 import { ENV } from "./_lib/env";
+
+function formatNgn(n: number): string {
+  return `₦${Math.round(n).toLocaleString("en-NG")}`;
+}
 
 function genOrderNo(): string {
   return ("TE" + Date.now().toString() + crypto.randomBytes(3).toString("hex")).toUpperCase();
@@ -265,25 +269,29 @@ async function activatePlan(req: ApiRequest): Promise<ApiResponse> {
 // ── Deposits (pay-in) ────────────────────────────────────────────────────────
 async function fundInitiate(req: ApiRequest): Promise<ApiResponse> {
   const uid = requireAuth(req);
-  const amount = Math.floor(Number(req.body?.amount) || 0);
-  if (amount < 100) return err("Minimum funding is ₦100");
+  // `amount` is what the user wants credited to their wallet (base). We charge
+  // that plus an 8% tax on top; only the base lands in the wallet.
+  const base = Math.floor(Number(req.body?.amount) || 0);
+  if (base < 100) return err("Minimum funding is ₦100");
+  const tax = depositTax(base);
+  const total = depositTotal(base);
   const provider = getProvider();
 
   // Reuse a recent PENDING order for the same amount (refresh-safe)
   const [reuse] = await sql`
     SELECT reference, meta FROM payments
-    WHERE user_id = ${uid} AND purpose = 'fund' AND status = 'pending' AND amount = ${amount}
+    WHERE user_id = ${uid} AND purpose = 'fund' AND status = 'pending' AND amount = ${base}
       AND created_at > now() - interval '25 minutes'
     ORDER BY created_at DESC LIMIT 1`;
   if (reuse && reuse.meta?.payUrl) {
-    return ok({ reference: reuse.reference, authorizationUrl: reuse.meta.payUrl, instant: false });
+    return ok({ reference: reuse.reference, authorizationUrl: reuse.meta.payUrl, instant: false, base, tax, total });
   }
 
   const [u] = await sql`SELECT email FROM users WHERE id = ${uid}`;
   const mchOrderNo = genOrderNo();
   const created = await provider.createOrder({
     mchOrderNo,
-    amount,
+    amount: total, // charge base + 8% tax
     email: u.email,
     notifyUrl: `${ENV.APP_URL}/api/deposits/nekpay/callback`,
     pageUrl: `${ENV.APP_URL}/deposit?ref=${mchOrderNo}`,
@@ -292,16 +300,17 @@ async function fundInitiate(req: ApiRequest): Promise<ApiResponse> {
     console.error("[nekpay] create order failed:", created.message);
     return err("Could not start payment. Please try again.");
   }
+  // Store the credited amount (base) so the callback credits the wallet correctly.
   await sql`
     INSERT INTO payments (user_id, reference, provider, purpose, amount, status, meta)
-    VALUES (${uid}, ${mchOrderNo}, ${provider.name}, 'fund', ${amount}, 'pending',
-            ${sql.json({ orderNo: created.providerRef, payUrl: created.payUrl })})`;
+    VALUES (${uid}, ${mchOrderNo}, ${provider.name}, 'fund', ${base}, 'pending',
+            ${sql.json({ orderNo: created.providerRef, payUrl: created.payUrl, tax, total })})`;
 
   if (created.instant) {
     await creditDeposit(mchOrderNo);
-    return ok({ reference: mchOrderNo, authorizationUrl: "", instant: true });
+    return ok({ reference: mchOrderNo, authorizationUrl: "", instant: true, base, tax, total });
   }
-  return ok({ reference: mchOrderNo, authorizationUrl: created.payUrl, instant: false });
+  return ok({ reference: mchOrderNo, authorizationUrl: created.payUrl, instant: false, base, tax, total });
 }
 
 // Idempotent credit: only the winner of the atomic PENDING claim credits once.
@@ -367,10 +376,17 @@ async function withdraw(req: ApiRequest): Promise<ApiResponse> {
   const [u] = await sql`SELECT * FROM users WHERE id = ${uid}`;
   const [bank] = await sql`SELECT * FROM banks WHERE user_id = ${uid}`;
   if (!bank) return err("Add a payout bank account first");
-  const minWithdraw = walletKind === "sales" ? SALES_WITHDRAW_MIN : WITHDRAW_MIN;
+  const plan = planOf(u.plan);
+  // Engagement minimum depends on the user's plan; sales is flat for everyone.
+  const minWithdraw = walletKind === "sales" ? SALES_WITHDRAW_MIN : plan.minWithdraw;
   if (amount < minWithdraw) return err(`Minimum withdrawal is ₦${minWithdraw.toLocaleString()}`);
   const balance = walletKind === "sales" ? num(u.sales) : num(u.engagement);
   if (amount > balance) return err("Insufficient balance in this wallet");
+
+  // 3.5% tax + ₦50 VAT come off the withdrawal; the user receives the net. The
+  // wallet is debited the full (gross) amount and refunded gross on failure.
+  const fee = withdrawFee(amount);
+  const net = withdrawNet(amount);
 
   const provider = getProvider();
   const transferId = genTransferId(uid);
@@ -382,7 +398,7 @@ async function withdraw(req: ApiRequest): Promise<ApiResponse> {
     else await tx`UPDATE users SET engagement = engagement - ${amount} WHERE id = ${uid}`;
     const [txn] = await tx`
       INSERT INTO transactions (user_id, type, title, amount, wallet, status)
-      VALUES (${uid}, 'withdraw', ${"Withdrawal to " + bank.bank_name}, ${-amount}, ${walletKind}, 'pending')
+      VALUES (${uid}, 'withdraw', ${`Withdrawal to ${bank.bank_name} · ${formatNgn(net)} net (${formatNgn(fee)} fee)`}, ${-amount}, ${walletKind}, 'pending')
       RETURNING id`;
     const [payout] = await tx`
       INSERT INTO payouts (user_id, reference, amount, wallet, bank_name, account_number, account_name, status, tx_id)
@@ -405,7 +421,7 @@ async function withdraw(req: ApiRequest): Promise<ApiResponse> {
 
   const res = await provider.payout({
     transferId,
-    amount,
+    amount: net, // the bank receives the net amount after tax + VAT
     bankName: bank.bank_name,
     bankCode: bankEntry?.code || "",
     accountNumber: bank.account_number,

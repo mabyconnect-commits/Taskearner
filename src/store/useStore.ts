@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { PlanId, planById, planDailyMax, WITHDRAW_MIN, SALES_WITHDRAW_MIN, COOLDOWN_MS } from "@/lib/data";
+import { PlanId, planById, planDailyMax, SALES_WITHDRAW_MIN, COOLDOWN_MS, withdrawFee, withdrawNet } from "@/lib/data";
 import { api, ApiError, getToken, setToken, ServerUser } from "@/lib/api";
 
 export type TxType = "voice" | "word" | "task" | "post" | "fund" | "withdraw" | "plan" | "commission" | "bill";
@@ -349,14 +349,17 @@ export const useStore = create<State>()(
           const s = get();
           if (!s.bank) return { ok: false, msg: "Add a payout bank account first." };
           const bal = wallet === "engagement" ? s.engagement : s.sales;
-          const min = wallet === "sales" ? SALES_WITHDRAW_MIN : WITHDRAW_MIN;
+          const min = wallet === "sales" ? SALES_WITHDRAW_MIN : planById(s.plan).minWithdraw;
           if (amount < min) return { ok: false, msg: `Minimum withdrawal is ₦${min.toLocaleString()}.` };
           if (amount > bal) return { ok: false, msg: "Insufficient balance in this wallet." };
+          // 3.5% tax + ₦50 VAT come off the payout; wallet is debited the gross.
+          const fee = withdrawFee(amount);
+          const net = withdrawNet(amount);
           set((st) => ({
             [wallet]: bal - amount,
-            transactions: [tx("withdraw", `Withdrawal to ${s.bank!.bankName}`, -amount, wallet), ...st.transactions].slice(0, 60),
+            transactions: [tx("withdraw", `Withdrawal to ${s.bank!.bankName} · ₦${net.toLocaleString()} net (₦${fee.toLocaleString()} fee)`, -amount, wallet), ...st.transactions].slice(0, 60),
           }) as Partial<State>);
-          return { ok: true, msg: "Withdrawal submitted. Payout within 24h." };
+          return { ok: true, msg: `Withdrawal submitted. You'll receive ₦${net.toLocaleString()} within 24h.` };
         },
 
         activatePlan: async (id) => {

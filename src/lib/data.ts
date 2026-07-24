@@ -19,6 +19,7 @@ export interface Plan {
   perPost: number;
   perTask: number;
   daily: DailyCaps;
+  minWithdraw: number; // engagement-wallet minimum withdrawal for this plan
   tagline: string;
   popular?: boolean;
 }
@@ -38,6 +39,7 @@ export const PLANS: Plan[] = [
     perPost: 50,
     perTask: 30,
     daily: { voice: 1, word: 1, task: 5, post: 3 },
+    minWithdraw: 8000,
     tagline: "Dip your toes in and start earning.",
   },
   {
@@ -50,6 +52,7 @@ export const PLANS: Plan[] = [
     perPost: 110,
     perTask: 60,
     daily: { voice: 1, word: 1, task: 8, post: 4 },
+    minWithdraw: 14500,
     tagline: "A solid step up for daily earners.",
   },
   {
@@ -62,6 +65,7 @@ export const PLANS: Plan[] = [
     perPost: 180,
     perTask: 100,
     daily: { voice: 1, word: 2, task: 12, post: 6 },
+    minWithdraw: 22000,
     tagline: "For creators who show up every day.",
     popular: true,
   },
@@ -75,6 +79,7 @@ export const PLANS: Plan[] = [
     perPost: 210,
     perTask: 130,
     daily: { voice: 1, word: 2, task: 18, post: 8 },
+    minWithdraw: 34000,
     tagline: "Premium rates, faster payouts.",
   },
   {
@@ -87,6 +92,7 @@ export const PLANS: Plan[] = [
     perPost: 250,
     perTask: 150,
     daily: { voice: 1, word: 2, task: 26, post: 21 },
+    minWithdraw: 45000,
     tagline: "The highest earning tier. Pay once, earn forever.",
   },
 ];
@@ -101,6 +107,7 @@ export const FREE_PLAN: Plan = {
   perPost: 0,
   perTask: 0,
   daily: { voice: 0, word: 0, task: 0, post: 0 },
+  minWithdraw: 8000,
   tagline: "Activate a plan to start earning.",
 };
 
@@ -108,8 +115,26 @@ export function planById(id: PlanId): Plan {
   return PLANS.find((p) => p.id === id) ?? FREE_PLAN;
 }
 
-export const WITHDRAW_MIN = 45000; // engagement wallet
-export const SALES_WITHDRAW_MIN = 1000; // sales/affiliate wallet
+export const WITHDRAW_MIN = 45000; // engagement wallet (fallback / highest tier)
+export const SALES_WITHDRAW_MIN = 1000; // sales/affiliate wallet — flat for all plans
+
+// Taxes & fees (mirror api/_lib/plans.ts)
+export const DEPOSIT_TAX_RATE = 0.08; // 8% added on top of the funded amount
+export const WITHDRAW_TAX_RATE = 0.035; // 3.5% deducted from every withdrawal
+export const WITHDRAW_VAT = 50; // flat ₦50 VAT per withdrawal
+
+export function depositTax(base: number): number {
+  return Math.round(base * DEPOSIT_TAX_RATE);
+}
+export function depositTotal(base: number): number {
+  return base + depositTax(base);
+}
+export function withdrawFee(amount: number): number {
+  return Math.round(amount * WITHDRAW_TAX_RATE) + WITHDRAW_VAT;
+}
+export function withdrawNet(amount: number): number {
+  return Math.max(0, amount - withdrawFee(amount));
+}
 
 export interface VoiceLang {
   key: string;
