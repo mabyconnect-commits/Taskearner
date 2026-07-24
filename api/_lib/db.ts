@@ -10,16 +10,34 @@ declare global {
   var __schemaReady: Promise<void> | undefined;
 }
 
-export const sql =
-  global.__sql ||
-  postgres(ENV.DATABASE_URL, {
+function createSql(): ReturnType<typeof postgres> {
+  return postgres(ENV.DATABASE_URL, {
     ssl: ENV.IS_PROD ? "require" : false,
     max: ENV.IS_PROD ? 1 : 10,
     idle_timeout: 20,
     connect_timeout: 10,
   });
+}
 
-if (!ENV.IS_PROD) global.__sql = sql;
+// Lazily construct the connection on first use. If DATABASE_URL is malformed,
+// postgres() throws — doing that at module load would crash the whole
+// serverless function (FUNCTION_INVOCATION_FAILED) before any error handling
+// runs. Deferring it lets the error be caught and reported as clean JSON.
+function realSql(): ReturnType<typeof postgres> {
+  if (!global.__sql) global.__sql = createSql();
+  return global.__sql;
+}
+
+export const sql: ReturnType<typeof postgres> = new Proxy(function () {} as any, {
+  apply(_target, _thisArg, args) {
+    return (realSql() as any)(...args);
+  },
+  get(_target, prop) {
+    const s = realSql() as any;
+    const v = s[prop];
+    return typeof v === "function" ? v.bind(s) : v;
+  },
+});
 
 // Idempotent schema creation. Runs once per warm instance.
 export async function ensureSchema(): Promise<void> {
