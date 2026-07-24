@@ -567,6 +567,7 @@ async function health(): Promise<ApiResponse> {
   }
   return ok({
     ok: connected,
+    build: "2026-07-24-lazydb-guard",
     provider: getProvider().name,
     db: {
       configured: !!envVar,
