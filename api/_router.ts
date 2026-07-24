@@ -567,7 +567,7 @@ async function health(): Promise<ApiResponse> {
   }
   return ok({
     ok: connected,
-    build: "2026-07-24-lazydb-guard",
+    build: "2026-07-24-esm-maxdur60",
     provider: getProvider().name,
     db: {
       configured: !!envVar,
@@ -890,6 +890,8 @@ export async function handleApi(req: ApiRequest): Promise<ApiResponse> {
   } catch (e: any) {
     if (e instanceof HttpError) return err(e.message, e.status);
     console.error("[api] error:", e);
-    return err("Something went wrong. Please try again.", 500);
+    // Surface the real reason (DB errors etc.) so failures aren't a blank
+    // "Request failed". Messages here are diagnostic, not secrets.
+    return err(`Server error: ${String(e?.message || e).slice(0, 200)}`, 500);
   }
 }

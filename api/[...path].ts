@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 // Build marker so we can confirm exactly which deployment is live via /api/health.
-const BUILD = "2026-07-24-lazydb-guard";
+const BUILD = "2026-07-24-esm-maxdur60";
 
 // Single catch-all function: routes every /api/* request through the shared
 // dispatcher. The router is imported *dynamically inside the handler* so that a
