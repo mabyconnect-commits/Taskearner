@@ -7,7 +7,7 @@ const NOTES = [
   { icon: Gift, color: "bg-brand-100 text-brand-600 dark:bg-brand-500/20 dark:text-brand-300", title: "Welcome bonus unlocked", body: "Activate any plan today and earn a ₦500 welcome bonus.", time: "2m ago", unread: true },
   { icon: TrendingUp, color: "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300", title: "Voice rates increased", body: "Prime Artiste now earns ₦600 per Voice Earn session.", time: "1h ago", unread: true },
   { icon: Megaphone, color: "bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300", title: "New sponsored posts", body: "5 fresh posts are available. Share and earn now.", time: "3h ago", unread: false },
-  { icon: ShieldCheck, color: "bg-sky-100 text-sky-600 dark:bg-sky-500/20 dark:text-sky-300", title: "Security tip", body: "Never place withdrawals using PalmPay as your bank.", time: "1d ago", unread: false },
+  { icon: ShieldCheck, color: "bg-sky-100 text-sky-600 dark:bg-sky-500/20 dark:text-sky-300", title: "Security tip", body: "Never place withdrawals using Moniepoint or Paga as your bank.", time: "1d ago", unread: false },
 ];
 
 export default function Notifications() {

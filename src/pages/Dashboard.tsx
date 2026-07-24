@@ -101,7 +101,7 @@ export default function Dashboard() {
         <div className="mt-5 flex items-start gap-3 rounded-2xl bg-brand-50 p-4 dark:bg-brand-500/10">
           <Megaphone className="mt-0.5 h-5 w-5 shrink-0 text-brand-500" />
           <p className="flex-1 text-sm font-semibold text-brand-700 dark:text-brand-200">
-            Do not place withdrawals using PalmPay as your bank.
+            Do not place withdrawals using Moniepoint or Paga as your bank.
           </p>
           <button onClick={() => setShowBanner(false)} className="text-brand-400">
             <X className="h-4 w-4" />
