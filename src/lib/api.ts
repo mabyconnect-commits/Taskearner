@@ -129,6 +129,7 @@ export const api = {
   adminTransactions: () => req<{ transactions: any[] }>("/admin/transactions"),
   adminDeposits: () => req<{ deposits: any[] }>("/admin/deposits"),
   adminDepositAction: (b: { id: string; action: "credit" | "fail" }) => req("/admin/deposits/action", "POST", b),
+  adminDepositQuery: (b: { id: string }) => req<{ reference: string; detectedPaid: boolean; amount: number; raw?: string; error?: string }>("/admin/deposits/query", "POST", b),
   adminPayouts: () => req<{ payouts: any[] }>("/admin/payouts"),
   adminPayoutAction: (b: { id: string; action: "approve" | "reject" | "retry" }) => req("/admin/payouts/action", "POST", b),
   adminTasks: () => req<{ tasks: any[] }>("/admin/tasks"),

@@ -783,6 +783,22 @@ async function adminDeposits(req: ApiRequest): Promise<ApiResponse> {
   });
 }
 
+// Diagnostic: ask NEKpay about this order and return the raw response so we can
+// see the exact fields it uses for a paid order (to fix auto-credit detection).
+async function adminDepositQuery(req: ApiRequest): Promise<ApiResponse> {
+  await requireAdmin(req);
+  const id = String(req.body?.id || "");
+  const [p] = await sql`SELECT * FROM payments WHERE id = ${id}`;
+  if (!p) return err("Deposit not found", 404);
+  const provider = getProvider();
+  try {
+    const q = await provider.queryOrder(p.reference);
+    return ok({ reference: p.reference, detectedPaid: q.paid, amount: q.amount, raw: q.raw });
+  } catch (e: any) {
+    return ok({ reference: p.reference, detectedPaid: false, error: String(e?.message || e).slice(0, 300) });
+  }
+}
+
 // Force-credit a deposit that never reflected, or mark a stuck one failed.
 async function adminDepositAction(req: ApiRequest): Promise<ApiResponse> {
   await requireAdmin(req);
@@ -1005,6 +1021,7 @@ const routes: Record<string, Handler> = {
   "GET /admin/transactions": adminTransactions,
   "GET /admin/deposits": adminDeposits,
   "POST /admin/deposits/action": adminDepositAction,
+  "POST /admin/deposits/query": adminDepositQuery,
   "GET /admin/payouts": adminPayouts,
   "POST /admin/payouts/action": adminPayoutAction,
   "GET /admin/tasks": adminTasks,

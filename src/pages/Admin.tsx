@@ -189,6 +189,7 @@ function DepositsTab() {
   const toast = useToast();
   const { data, loading, reload } = useAsync(() => api.adminDeposits());
   const [busy, setBusy] = useState<string | null>(null);
+  const [probe, setProbe] = useState<Record<string, string>>({});
 
   const act = async (id: string, action: "credit" | "fail") => {
     setBusy(id);
@@ -196,6 +197,19 @@ function DepositsTab() {
       await api.adminDepositAction({ id, action });
       toast(action === "credit" ? "Wallet credited" : "Marked as failed", "success");
       reload();
+    } catch (e: any) {
+      toast(e?.message || "Failed", "error");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const check = async (id: string) => {
+    setBusy(id);
+    try {
+      const r = await api.adminDepositQuery({ id });
+      setProbe((m) => ({ ...m, [id]: JSON.stringify({ detectedPaid: r.detectedPaid, amount: r.amount, raw: r.raw, error: r.error }, null, 1) }));
+      toast(r.detectedPaid ? "NEKpay says PAID" : "NEKpay says not paid yet", r.detectedPaid ? "success" : "info");
     } catch (e: any) {
       toast(e?.message || "Failed", "error");
     } finally {
@@ -222,9 +236,12 @@ function DepositsTab() {
           <IdRow label="NEKpay ID" value={d.nekpayId} />
           <IdRow label="Ref" value={d.reference} />
           {d.status !== "paid" && (
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               <button onClick={() => act(d.id, "credit")} disabled={busy === d.id} className="btn-primary flex-1 py-2.5 text-sm">
                 {busy === d.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Force credit
+              </button>
+              <button onClick={() => check(d.id)} disabled={busy === d.id} className="btn-ghost flex-1 py-2.5 text-sm">
+                <RefreshCw className="h-4 w-4" /> Check NEKpay
               </button>
               {d.status !== "failed" && (
                 <button onClick={() => act(d.id, "fail")} disabled={busy === d.id} className="btn-ghost flex-1 py-2.5 text-sm text-rose-500">
@@ -232,6 +249,9 @@ function DepositsTab() {
                 </button>
               )}
             </div>
+          )}
+          {probe[d.id] && (
+            <pre className="mt-2 max-h-48 overflow-auto rounded-xl bg-slate-900 p-3 text-[10px] leading-tight text-emerald-300">{probe[d.id]}</pre>
           )}
         </div>
       ))}
