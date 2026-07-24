@@ -31,17 +31,34 @@ export class ApiError extends Error {
 }
 
 async function req<T = any>(path: string, method = "GET", body?: unknown): Promise<T> {
-  const res = await fetch(BASE + path, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError((data as any)?.error || "Request failed", res.status);
-  return data as T;
+  let res: Response;
+  try {
+    res = await fetch(BASE + path, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (e: any) {
+    // fetch itself failed (offline / DNS / CORS)
+    throw new ApiError(`Network error: ${String(e?.message || e).slice(0, 120)}`, 0);
+  }
+
+  // Read as text first so we can surface non-JSON error pages (timeouts,
+  // firewall blocks, etc.) instead of a useless generic message.
+  const raw = await res.text().catch(() => "");
+  let data: any = null;
+  try { data = raw ? JSON.parse(raw) : {}; } catch { /* non-JSON body */ }
+
+  if (!res.ok) {
+    if (data && data.error) throw new ApiError(String(data.error), res.status);
+    // Strip HTML tags from platform error pages, keep it short and readable.
+    const snippet = (raw || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
+    throw new ApiError(`HTTP ${res.status}${snippet ? " — " + snippet : " (empty response)"}`, res.status);
+  }
+  return (data ?? {}) as T;
 }
 
 export interface ServerUser {
