@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Menu, Bell, Smartphone, Wifi, Zap, Tv, Crown, X, Mic, Gamepad2, CheckCircle2, Megaphone,
-  ArrowRight, Share2, Copy, Check, ArrowUp, Users,
+  ArrowRight, Share2, Copy, Check, ArrowUp, Users, TrendingUp,
 } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { greeting, formatNaira } from "@/lib/format";
@@ -48,8 +48,17 @@ export default function Dashboard() {
   const nextStep = steps.find((s) => !s.done);
 
   // --- overview stats ---
-  const activitiesDone = transactions.filter((t) => ["voice", "word", "task", "post"].includes(t.type)).length;
-  const remaining = Math.max(0, DAILY_GOAL - activitiesDone);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const todayStart = startOfToday.getTime();
+  const earnTypes = ["voice", "word", "task", "post", "commission"];
+  const todaysEarnings = transactions
+    .filter((t) => t.amount > 0 && earnTypes.includes(t.type) && t.ts >= todayStart)
+    .reduce((s, t) => s + t.amount, 0);
+  const activitiesToday = transactions.filter(
+    (t) => ["voice", "word", "task", "post"].includes(t.type) && t.ts >= todayStart,
+  ).length;
+  const remaining = Math.max(0, DAILY_GOAL - activitiesToday);
   const withdrawnLifetime = transactions.filter((t) => t.type === "withdraw").reduce((s, t) => s + Math.abs(t.amount), 0);
 
   // --- referral ---
@@ -186,12 +195,23 @@ export default function Dashboard() {
             All transactions
           </button>
         </div>
+
+        {/* today's earnings */}
+        <div className="relative mb-3 overflow-hidden rounded-3xl bg-gradient-to-br from-ink-800 via-ink-900 to-ink-950 p-5 text-white shadow-card">
+          <div className="pointer-events-none absolute -right-6 -top-8 h-28 w-28 rounded-full bg-brand-500/20 blur-2xl" />
+          <div className="flex items-center gap-2 text-sm text-white/60">
+            <TrendingUp className="h-4 w-4 text-brand-400" /> Today's earnings
+          </div>
+          <p className="mt-1 font-display text-4xl font-extrabold text-brand-400">{formatNaira(todaysEarnings)}</p>
+          <p className="mt-1 text-sm text-white/50">{activitiesToday} activities today · {remaining} more to hit your daily goal</p>
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div className="card p-4">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-amber-100 text-amber-500 dark:bg-amber-500/20">
               <CheckCircle2 className="h-5 w-5" />
             </span>
-            <p className="mt-3 font-display text-3xl font-extrabold">{activitiesDone}</p>
+            <p className="mt-3 font-display text-3xl font-extrabold">{activitiesToday}</p>
             <p className="text-sm text-slate-400">Voice/Task done · {remaining} to daily goal</p>
           </div>
           <div className="card p-4">
