@@ -90,6 +90,121 @@ export function planById(id: PlanId): Plan {
 
 export const WITHDRAW_MIN = 45000;
 
+export interface VoiceLang {
+  key: string;
+  label: string;
+  sub: string;
+  flag: string;
+  code: string; // BCP-47 for SpeechRecognition
+  sentences: string[];
+}
+
+export const VOICE_LANGS: VoiceLang[] = [
+  {
+    key: "english",
+    label: "English",
+    sub: "Simple everyday sentences",
+    flag: "🇬🇧",
+    code: "en-US",
+    sentences: [
+      "The constitution provides fundamental rights for all citizens.",
+      "Every voice you lend today builds the wealth of tomorrow.",
+      "Speak clearly and earn boldly with Task Earner Africa.",
+      "Small daily wins compound into life changing rewards.",
+      "Your words carry value far beyond the sound.",
+    ],
+  },
+  {
+    key: "pidgin",
+    label: "Pidgin",
+    sub: "Naija pidgin English",
+    flag: "🇳🇬",
+    code: "en-NG",
+    sentences: [
+      "Wetin you dey wait for, come dey earn with your voice.",
+      "Small small money dey turn to plenty when you consistent.",
+      "Your voice na money, use am well well today.",
+      "No be lie, Task Earner dey pay real cash.",
+      "Make you talk am well, e go enter your wallet.",
+    ],
+  },
+  {
+    key: "french",
+    label: "French",
+    sub: "Basic French phrases",
+    flag: "🇫🇷",
+    code: "fr-FR",
+    sentences: [
+      "Votre voix a une grande valeur aujourd hui.",
+      "Chaque jour vous pouvez gagner de l argent facilement.",
+      "Parlez clairement pour gagner votre récompense.",
+      "La constance est la clé de la réussite.",
+      "Bienvenue sur Task Earner Africa.",
+    ],
+  },
+];
+
+export interface WordItem {
+  word: string;
+  hint: string;
+}
+export interface WordLang {
+  key: string;
+  label: string;
+  sub: string;
+  flag: string;
+  code: string;
+  words: WordItem[];
+}
+
+export const WORD_LANGS: WordLang[] = [
+  {
+    key: "english",
+    label: "English",
+    sub: "Simple words",
+    flag: "🇬🇧",
+    code: "en-US",
+    words: [
+      { word: "Entrepreneurship", hint: "on-truh-pruh-NUR-ship" },
+      { word: "Determination", hint: "dee-tur-mih-NAY-shun" },
+      { word: "Accomplishment", hint: "uh-KOM-plish-ment" },
+      { word: "Serendipity", hint: "seh-run-DIP-ih-tee" },
+      { word: "Responsibility", hint: "ri-spon-sih-BIL-ih-tee" },
+      { word: "Congratulations", hint: "kun-grach-oo-LAY-shuns" },
+    ],
+  },
+  {
+    key: "pidgin",
+    label: "Pidgin",
+    sub: "Naija words",
+    flag: "🇳🇬",
+    code: "en-NG",
+    words: [
+      { word: "Wahala", hint: "wah-HAH-lah" },
+      { word: "Gbese", hint: "g-BEH-seh" },
+      { word: "Sabi", hint: "SAH-bee" },
+      { word: "Chop", hint: "chop" },
+      { word: "Comot", hint: "koh-MOT" },
+      { word: "Abeg", hint: "ah-BEG" },
+    ],
+  },
+  {
+    key: "french",
+    label: "French",
+    sub: "Basic words",
+    flag: "🇫🇷",
+    code: "fr-FR",
+    words: [
+      { word: "Bonjour", hint: "bon-ZHOOR" },
+      { word: "Merci", hint: "mair-SEE" },
+      { word: "Félicitations", hint: "fay-lee-see-ta-SYON" },
+      { word: "Magnifique", hint: "man-yee-FEEK" },
+      { word: "Bienvenue", hint: "byan-vuh-NUU" },
+      { word: "Extraordinaire", hint: "eks-tra-or-dee-NAIR" },
+    ],
+  },
+];
+
 export const VOICE_SENTENCES: string[] = [
   "The quick brown fox jumps over the lazy dog.",
   "Every voice you lend today builds the wealth of tomorrow.",

@@ -18,6 +18,7 @@ export default function Tasks() {
   const { plan, completedTasks, earnActivity } = useStore();
   const p = planById(plan);
   const [busy, setBusy] = useState<string | null>(null);
+  const [tab, setTab] = useState<"available" | "completed">("available");
 
   if (plan === "free") return <Locked nav={nav} />;
 
@@ -32,6 +33,9 @@ export default function Tasks() {
   };
 
   const done = completedTasks.filter((id) => DAILY_TASKS.some((t) => t.id === id)).length;
+  const shown = DAILY_TASKS.filter((t) =>
+    tab === "available" ? !completedTasks.includes(t.id) : completedTasks.includes(t.id),
+  );
 
   return (
     <Layout hideNav>
@@ -56,8 +60,33 @@ export default function Tasks() {
         </div>
       </div>
 
+      {/* Available / Completed tabs */}
+      <div className="mb-4 flex rounded-2xl bg-slate-100 p-1.5 dark:bg-white/5">
+        {(["available", "completed"] as const).map((tb) => (
+          <button
+            key={tb}
+            onClick={() => setTab(tb)}
+            className={cn(
+              "flex-1 rounded-xl py-3 text-sm font-bold capitalize transition",
+              tab === tb ? "bg-brand-500 text-slate-900 shadow" : "text-slate-500",
+            )}
+          >
+            {tb} {tb === "available" ? `(${DAILY_TASKS.length - done})` : `(${done})`}
+          </button>
+        ))}
+      </div>
+
+      {shown.length === 0 && (
+        <div className="card flex flex-col items-center p-8 text-center">
+          <div className="grid h-14 w-14 place-items-center rounded-full bg-brand-100 dark:bg-brand-500/20">
+            <Check className="h-7 w-7 text-brand-600 dark:text-brand-300" />
+          </div>
+          <p className="mt-3 text-slate-400">{tab === "available" ? "All tasks done for today. 🎉" : "No completed tasks yet."}</p>
+        </div>
+      )}
+
       <div className="space-y-3">
-        {DAILY_TASKS.map((t) => {
+        {shown.map((t) => {
           const isDone = completedTasks.includes(t.id);
           const Icon = iconFor(t.category);
           return (

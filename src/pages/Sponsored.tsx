@@ -9,14 +9,6 @@ import { formatNaira } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 
-const platformColor: Record<SponsoredPost["platform"], string> = {
-  WhatsApp: "bg-emerald-500",
-  Facebook: "bg-blue-600",
-  X: "bg-slate-900",
-  Instagram: "bg-gradient-to-br from-fuchsia-500 to-amber-500",
-  TikTok: "bg-slate-800",
-};
-
 export default function Sponsored() {
   const nav = useNavigate();
   const toast = useToast();
@@ -68,34 +60,34 @@ export default function Sponsored() {
           const isShared = shared.includes(post.id);
           return (
             <div key={post.id} className="card overflow-hidden">
-              <div className="flex items-center gap-3 border-b border-slate-100 p-4 dark:border-white/5">
-                <span className={cn("grid h-10 w-10 place-items-center rounded-xl text-xs font-bold text-white", platformColor[post.platform])}>
-                  {post.platform[0]}
-                </span>
-                <div className="flex-1">
-                  <p className="font-bold leading-tight">{post.headline}</p>
-                  <p className="text-xs text-slate-400">Share on {post.platform}</p>
+              {/* promo banner (the shareable graphic) */}
+              <div className="relative overflow-hidden bg-gradient-to-br from-ink-800 via-ink-900 to-ink-950 p-5 text-white">
+                <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-brand-500/25 blur-2xl" />
+                <p className="font-display text-3xl font-extrabold leading-none text-brand-400">MILLIONS<br />DAILY!</p>
+                <p className="mt-2 max-w-[80%] text-xs text-white/70">{post.headline} — join Task Earner Africa and turn your voice into alerts. 💸</p>
+                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 text-xs font-bold text-emerald-300">
+                  ✓ Credit Alert · NGN 250,000.00
                 </div>
-                <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300">
-                  +{formatNaira(p.perPost, false)}
-                </span>
               </div>
+
               <div className="p-4">
-                <p className="rounded-2xl bg-slate-50 p-3 text-sm text-slate-600 dark:bg-white/5 dark:text-slate-300">"{post.copy}"</p>
-                <div className="mt-3 flex gap-2">
-                  <button onClick={() => copy(post)} className="btn-ghost flex-1 py-3 text-sm">
-                    {copied === post.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    {copied === post.id ? "Copied" : "Copy"}
-                  </button>
-                  <button
-                    onClick={() => share(post)}
-                    disabled={isShared || !!busy}
-                    className={cn("btn flex-1 py-3 text-sm text-white", isShared ? "bg-emerald-500" : "btn-primary")}
-                  >
-                    {busy === post.id ? <Loader2 className="h-4 w-4 animate-spin" /> : isShared ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
-                    {isShared ? "Earned" : "Share & earn"}
-                  </button>
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-slate-400">Share on: <b className="text-slate-600 dark:text-slate-200">{post.platform.toUpperCase()}</b></p>
+                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300">+{formatNaira(p.perPost, false)}</span>
                 </div>
+                <p className="rounded-2xl bg-slate-50 p-3 text-sm text-slate-600 dark:bg-white/5 dark:text-slate-300">"{post.copy}"</p>
+                <button onClick={() => copy(post)} className="btn-ghost mt-3 w-full py-3 text-sm">
+                  {copied === post.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  {copied === post.id ? "Copied" : "Copy content"}
+                </button>
+                <button
+                  onClick={() => share(post)}
+                  disabled={isShared || !!busy}
+                  className={cn("btn mt-2 w-full py-3.5 text-white", isShared ? "bg-emerald-500" : "btn-primary")}
+                >
+                  {busy === post.id ? <Loader2 className="h-4 w-4 animate-spin" /> : isShared ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
+                  {isShared ? "Posted & credited" : "I have performed this post"}
+                </button>
               </div>
             </div>
           );

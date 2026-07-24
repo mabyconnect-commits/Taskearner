@@ -1,17 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Volume2, Check, Crown, RotateCcw } from "lucide-react";
+import { Volume2, Check, Crown, Play, Square, Loader2, X, HelpCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Sheet } from "@/components/ui/Sheet";
 import { useStore } from "@/store/useStore";
-import { planById, WORD_GAME_WORDS } from "@/lib/data";
+import { planById, WORD_LANGS, WordLang } from "@/lib/data";
 import { formatNaira } from "@/lib/format";
+import { useSpeech, wordMatches } from "@/lib/speech";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 
-const ROUNDS = 3;
-const TIME = 10;
+const ROUNDS = 2;
+type Phase = "intro" | "playing" | "done";
 
 export default function WordGame() {
   const nav = useNavigate();
@@ -19,63 +21,57 @@ export default function WordGame() {
   const { plan, earnActivity } = useStore();
   const p = planById(plan);
 
-  const [phase, setPhase] = useState<"idle" | "playing" | "done">("idle");
+  const [phase, setPhase] = useState<Phase>("intro");
+  const [langSheet, setLangSheet] = useState(false);
+  const [lang, setLang] = useState<WordLang>(WORD_LANGS[0]);
+  const [autoStart, setAutoStart] = useState(true);
   const [round, setRound] = useState(0);
-  const [time, setTime] = useState(TIME);
   const [earned, setEarned] = useState(0);
-  const [words] = useState(() => [...WORD_GAME_WORDS].sort(() => Math.random() - 0.5).slice(0, ROUNDS));
-  const tick = useRef<number | null>(null);
+  const [busy, setBusy] = useState(false);
   const correct = useRef(0);
 
-  useEffect(() => () => { if (tick.current) clearInterval(tick.current); }, []);
+  const words = useMemo(() => [...lang.words].sort(() => Math.random() - 0.5).slice(0, ROUNDS), [lang, phase === "playing"]);
+  const current = words[round];
+  const { supported, listening, transcript, start, stop, reset } = useSpeech(lang.code);
 
-  if (plan === "free") return <Locked />;
+  if (plan === "free") return <Locked nav={nav} />;
 
-  const startRound = (r: number) => {
-    setRound(r);
-    setTime(TIME);
-    if (tick.current) clearInterval(tick.current);
-    tick.current = window.setInterval(() => {
-      setTime((t) => {
-        if (t <= 1) {
-          clearInterval(tick.current!);
-          next(r, false);
-          return 0;
-        }
-        return t - 1;
-      });
-    }, 1000);
-  };
-
-  const start = () => {
+  const beginGame = () => {
+    setLangSheet(false);
     setPhase("playing");
-    setEarned(0);
+    setRound(0);
     correct.current = 0;
-    startRound(0);
+    if (autoStart && supported) setTimeout(start, 350);
   };
 
   const speak = () => {
     try {
-      const u = new SpeechSynthesisUtterance(words[round]);
+      const u = new SpeechSynthesisUtterance(current.word);
+      u.lang = lang.code;
       u.rate = 0.85;
       window.speechSynthesis?.speak(u);
     } catch { /* ignore */ }
   };
 
-  const next = async (r: number, success: boolean) => {
-    if (tick.current) clearInterval(tick.current);
-    if (success) {
+  const check = async () => {
+    stop();
+    const ok = supported ? wordMatches(transcript, current.word) : true;
+    if (ok) {
       correct.current += 1;
-      toast(`Correct! +${formatNaira(p.perWord)}`);
+      toast(`Correct! “${current.word}” 👏`);
     } else {
-      toast("Time's up on that word!", "error");
+      toast(`Hmm, that didn't match “${current.word}”. Try the next one.`, "error");
     }
-    if (r + 1 < ROUNDS) {
-      startRound(r + 1);
+    reset();
+    if (round + 1 < ROUNDS) {
+      setRound(round + 1);
+      if (autoStart && supported) setTimeout(start, 500);
     } else {
       setPhase("done");
       if (correct.current > 0) {
+        setBusy(true);
         const res = await earnActivity("word", undefined, correct.current);
+        setBusy(false);
         setEarned(res.ok ? res.amount ?? p.perWord * correct.current : 0);
         if (!res.ok) toast(res.msg, "error");
       } else {
@@ -86,90 +82,125 @@ export default function WordGame() {
 
   return (
     <Layout hideNav>
-      <PageHeader title="Word Game" subtitle={`Pronounce within 10s · ${formatNaira(p.perWord)}/word`} to="/earn" />
+      <PageHeader
+        title="Word Game"
+        subtitle={`Say ${ROUNDS} words to earn ${formatNaira(p.perWord * ROUNDS)}`}
+        to="/earn"
+        right={
+          <button onClick={() => toast("Tap the mic, say the word clearly, then tap Done.", "info")} className="grid h-11 w-11 place-items-center rounded-full bg-slate-100 dark:bg-white/10">
+            <HelpCircle className="h-5 w-5" />
+          </button>
+        }
+      />
 
-      {phase === "idle" && (
-        <div className="card flex flex-col items-center p-8 text-center">
-          <div className="grid h-20 w-20 place-items-center rounded-3xl bg-emerald-100 dark:bg-emerald-500/20">
-            <Volume2 className="h-10 w-10 text-emerald-500" />
-          </div>
-          <h2 className="mt-4 font-display text-2xl font-extrabold">Beat the clock</h2>
-          <p className="mt-1 text-slate-400">
-            You'll get {ROUNDS} long words. Pronounce each one out loud within {TIME} seconds and tap “I said it”.
-          </p>
-          <button onClick={start} className="btn-primary mt-6 w-full py-4 text-lg">Start game</button>
-        </div>
-      )}
-
-      {phase === "playing" && (
+      {phase === "intro" && (
         <>
-          <div className="mb-4 flex items-center justify-between text-sm font-semibold text-slate-400">
-            <span>Word {round + 1} of {ROUNDS}</span>
-            <span>Earned {formatNaira(earned)}</span>
-          </div>
-
-          {/* timer ring */}
-          <div className="mx-auto my-6 grid h-40 w-40 place-items-center">
-            <svg className="absolute h-40 w-40 -rotate-90" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="45" className="fill-none stroke-slate-100 dark:stroke-white/10" strokeWidth="8" />
-              <motion.circle
-                cx="50" cy="50" r="45"
-                className={cn("fill-none", time <= 3 ? "stroke-rose-500" : "stroke-emerald-500")}
-                strokeWidth="8" strokeLinecap="round"
-                strokeDasharray={2 * Math.PI * 45}
-                animate={{ strokeDashoffset: 2 * Math.PI * 45 * (1 - time / TIME) }}
-                transition={{ ease: "linear", duration: 1 }}
-              />
-            </svg>
-            <span className={cn("font-display text-5xl font-extrabold", time <= 3 ? "text-rose-500" : "text-slate-800 dark:text-white")}>
-              {time}
-            </span>
-          </div>
-
-          <div className="card p-6 text-center">
-            <p className="text-sm font-semibold text-slate-400">Pronounce this word</p>
-            <p className="mt-2 font-display text-3xl font-extrabold tracking-tight text-brand-600 dark:text-brand-300">
-              {words[round]}
+          <div className="card dotted flex flex-col items-center p-8 text-center">
+            <div className="grid h-20 w-20 place-items-center rounded-full bg-brand-100 dark:bg-brand-500/20">
+              <Volume2 className="h-10 w-10 text-brand-600 dark:text-brand-300" />
+            </div>
+            <h2 className="mt-4 font-display text-2xl font-extrabold">Word Game</h2>
+            <p className="mt-2 text-slate-500 dark:text-slate-300">
+              Say <b>{ROUNDS} words</b> correctly to earn <span className="font-bold text-emerald-500">{formatNaira(p.perWord * ROUNDS)}</span>. No timer — just say each word clearly.
             </p>
-            <button onClick={speak} className="btn-ghost mx-auto mt-4 px-4 py-2 text-sm">
-              <Volume2 className="h-4 w-4" /> Hear it
+          </div>
+
+          <button onClick={() => setLangSheet(true)} className="btn-primary mt-5 w-full py-4 text-lg">
+            <Play className="h-5 w-5" /> Start Game
+          </button>
+
+          <div className="mt-4 flex items-center gap-4 rounded-3xl bg-white p-4 shadow-soft dark:bg-white/[0.04]">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-brand-500 text-slate-900"><Volume2 className="h-5 w-5" /></span>
+            <div className="flex-1">
+              <p className="font-bold">Auto-start microphone</p>
+              <p className="text-sm text-slate-400">Start listening automatically each round</p>
+            </div>
+            <button onClick={() => setAutoStart((v) => !v)} className={cn("relative h-7 w-12 rounded-full transition", autoStart ? "bg-brand-500" : "bg-slate-300 dark:bg-white/20")}>
+              <span className={cn("absolute top-0.5 h-6 w-6 rounded-full bg-white transition-all", autoStart ? "left-[22px]" : "left-0.5")} />
             </button>
           </div>
-
-          <button onClick={() => next(round, true)} className="btn-primary mt-6 w-full py-4 text-lg">
-            <Check className="h-5 w-5" /> I said it
-          </button>
         </>
+      )}
+
+      {phase === "playing" && current && (
+        <div className="card p-6 text-center">
+          <p className="text-sm font-bold uppercase tracking-widest text-slate-400">Word {round + 1} of {ROUNDS} — say it aloud</p>
+          <p className="mt-3 font-display text-4xl font-extrabold tracking-tight text-brand-600 dark:text-brand-400">{current.word}</p>
+          <p className="mt-1 text-slate-400">({current.hint})</p>
+
+          <button onClick={speak} className="btn-ghost mx-auto mt-3 px-4 py-2 text-sm"><Volume2 className="h-4 w-4" /> Hear it</button>
+
+          <div className="mt-5 flex flex-col items-center">
+            <button
+              onClick={listening ? stop : start}
+              disabled={!supported}
+              className={cn(
+                "relative grid h-24 w-24 place-items-center rounded-full text-white shadow-glow transition active:scale-95",
+                listening ? "bg-rose-500" : "bg-brand-500 text-slate-900",
+              )}
+            >
+              {listening && <span className="absolute inset-0 animate-pulseRing rounded-full ring-4 ring-rose-400/50" />}
+              {listening ? <Square className="h-9 w-9" /> : <Volume2 className="h-9 w-9" />}
+            </button>
+            <p className={cn("mt-3 text-sm font-semibold", listening ? "text-rose-500" : "text-slate-500")}>
+              {!supported ? "Speech not available — tap Done to continue" : listening ? "● Listening… say it, then tap stop" : "Tap to start speaking"}
+            </p>
+            {transcript && <p className="mt-1 text-xs text-slate-400">heard: “{transcript}”</p>}
+          </div>
+
+          <button onClick={check} disabled={busy} className="btn-primary mt-5 w-full py-4 text-lg">
+            {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Check className="h-5 w-5" /> Done — check my voice</>}
+          </button>
+        </div>
       )}
 
       {phase === "done" && (
         <div className="card flex flex-col items-center p-8 text-center">
-          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="grid h-20 w-20 place-items-center rounded-full bg-emerald-100 dark:bg-emerald-500/20">
-            <Check className="h-10 w-10 text-emerald-500" strokeWidth={3} />
+          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className={cn("grid h-20 w-20 place-items-center rounded-full", earned > 0 ? "bg-emerald-100 dark:bg-emerald-500/20" : "bg-rose-100 dark:bg-rose-500/20")}>
+            {earned > 0 ? <Check className="h-10 w-10 text-emerald-500" strokeWidth={3} /> : <X className="h-10 w-10 text-rose-500" strokeWidth={3} />}
           </motion.div>
           <h2 className="mt-4 font-display text-2xl font-extrabold">Game over!</h2>
-          <p className="mt-1 text-slate-400">Great pronunciation. Here's what you banked:</p>
+          <p className="mt-1 text-slate-400">{correct.current} of {ROUNDS} words correct.</p>
           <p className="mt-4 font-display text-4xl font-extrabold text-emerald-500">+{formatNaira(earned)}</p>
           <div className="mt-6 flex w-full gap-3">
-            <button onClick={() => nav("/earn")} className="btn-ghost flex-1 py-3.5">
-              <RotateCcw className="h-4 w-4" /> Done
-            </button>
+            <button onClick={() => nav("/earn")} className="btn-ghost flex-1 py-3.5">Done</button>
             <button onClick={() => nav("/wallet")} className="btn-primary flex-1 py-3.5">Withdraw</button>
           </div>
         </div>
       )}
+
+      <Sheet open={langSheet} onClose={() => setLangSheet(false)} title="Choose a language">
+        <div className="space-y-2">
+          {WORD_LANGS.map((l) => (
+            <button
+              key={l.key}
+              onClick={() => setLang(l)}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-2xl border-2 p-4 text-left transition",
+                lang.key === l.key ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10" : "border-slate-100 dark:border-white/10",
+              )}
+            >
+              <span className="text-2xl">{l.flag}</span>
+              <span className="font-bold">{l.label}</span>
+              <span className="text-sm text-slate-400">{l.sub}</span>
+            </button>
+          ))}
+        </div>
+        <button onClick={beginGame} className="btn-primary mt-4 w-full py-4 text-lg">
+          <Play className="h-5 w-5" /> Begin
+        </button>
+      </Sheet>
     </Layout>
   );
 }
 
-function Locked() {
-  const nav = useNavigate();
+function Locked({ nav }: { nav: ReturnType<typeof useNavigate> }) {
   return (
     <Layout hideNav>
       <PageHeader title="Word Game" to="/earn" />
       <div className="card mt-10 flex flex-col items-center p-8 text-center">
         <div className="grid h-20 w-20 place-items-center rounded-full bg-brand-100 dark:bg-brand-500/20">
-          <Crown className="h-10 w-10 text-brand-500" />
+          <Crown className="h-10 w-10 text-brand-600 dark:text-brand-300" />
         </div>
         <h2 className="mt-4 font-display text-2xl font-extrabold">Activate a plan first</h2>
         <p className="mt-1 text-slate-400">The Word Game unlocks with any lifetime plan.</p>

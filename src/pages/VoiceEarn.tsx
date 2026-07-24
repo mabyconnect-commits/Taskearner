@@ -1,167 +1,210 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mic, Check, Crown, Clock } from "lucide-react";
+import { Mic, Check, Crown, Play, HelpCircle, Square, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Sheet } from "@/components/ui/Sheet";
 import { useStore } from "@/store/useStore";
-import { planById, VOICE_SENTENCES } from "@/lib/data";
+import { planById, VOICE_LANGS, VoiceLang } from "@/lib/data";
 import { formatNaira } from "@/lib/format";
+import { useSpeech, sentenceCoverage, normalize } from "@/lib/speech";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 
-type Phase = "idle" | "reading" | "done";
+type Phase = "intro" | "reading" | "done";
 
 export default function VoiceEarn() {
   const nav = useNavigate();
   const toast = useToast();
-  const { plan, earnActivity, cooldowns } = useStore();
+  const { plan, earnActivity } = useStore();
   const p = planById(plan);
 
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [earnedAmt, setEarnedAmt] = useState(p.perVoice);
-  const [sentenceIdx, setSentenceIdx] = useState(0);
-  const [wordIdx, setWordIdx] = useState(-1);
-  const timer = useRef<number | null>(null);
+  const [phase, setPhase] = useState<Phase>("intro");
+  const [langSheet, setLangSheet] = useState(false);
+  const [lang, setLang] = useState<VoiceLang>(VOICE_LANGS[0]);
+  const [autoStart, setAutoStart] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [earned, setEarned] = useState(p.perVoice);
 
-  const sentences = VOICE_SENTENCES.slice(0, 4);
-  const words = sentences[sentenceIdx]?.split(" ") ?? [];
+  const sentence = useMemo(() => lang.sentences[Math.floor(Math.random() * lang.sentences.length)], [lang, phase === "reading"]);
+  const words = sentence.split(" ");
+  const { supported, listening, transcript, start, stop } = useSpeech(lang.code);
 
-  const cooldownLeft = Math.max(0, (cooldowns["voice"] ?? 0) - Date.now());
-  const [, force] = useState(0);
+  const coverage = sentenceCoverage(transcript, sentence);
+  const spokenNorm = normalize(transcript);
+
+  // auto-complete when they've clearly read it
   useEffect(() => {
-    if (cooldownLeft <= 0) return;
-    const t = window.setInterval(() => force((n) => n + 1), 500);
-    return () => clearInterval(t);
-  }, [cooldownLeft]);
+    if (phase === "reading" && coverage >= 0.7) finish();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coverage, phase]);
 
-  useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
+  if (plan === "free") return <Locked nav={nav} />;
 
-  if (plan === "free") return <Locked />;
-
-  const startReading = () => {
+  const beginReading = () => {
+    setLangSheet(false);
     setPhase("reading");
-    setSentenceIdx(0);
-    setWordIdx(-1);
-    runSentence(0);
-  };
-
-  const runSentence = (sIdx: number) => {
-    const w = sentences[sIdx].split(" ");
-    let i = -1;
-    if (timer.current) clearInterval(timer.current);
-    timer.current = window.setInterval(() => {
-      i += 1;
-      setWordIdx(i);
-      if (i >= w.length - 1) {
-        clearInterval(timer.current!);
-        window.setTimeout(() => {
-          if (sIdx + 1 < sentences.length) {
-            setSentenceIdx(sIdx + 1);
-            setWordIdx(-1);
-            runSentence(sIdx + 1);
-          } else {
-            finish();
-          }
-        }, 500);
-      }
-    }, 380);
+    if (autoStart && supported) setTimeout(start, 350);
   };
 
   const finish = async () => {
+    if (busy) return;
+    stop();
+    setBusy(true);
     const res = await earnActivity("voice");
+    setBusy(false);
     if (!res.ok) {
       toast(res.msg, "error");
-      setPhase("idle");
       return;
     }
-    setEarnedAmt(res.amount ?? p.perVoice);
+    setEarned(res.amount ?? p.perVoice);
     setPhase("done");
     toast(`You earned ${formatNaira(res.amount ?? p.perVoice)}! 🎙️`);
   };
 
-  const progress = phase === "reading" ? ((sentenceIdx + (wordIdx + 1) / Math.max(words.length, 1)) / sentences.length) * 100 : phase === "done" ? 100 : 0;
-
   return (
     <Layout hideNav>
-      <PageHeader title="Voice Earn" subtitle={`Read aloud · ${formatNaira(p.perVoice)} per session`} to="/earn" />
+      <PageHeader
+        title="Voice Earn"
+        subtitle={`Earn ${formatNaira(p.perVoice)} today`}
+        to="/earn"
+        right={
+          <button onClick={() => toast("Tap the mic, allow microphone access, then read aloud.", "info")} className="grid h-11 w-11 place-items-center rounded-full bg-slate-100 dark:bg-white/10">
+            <HelpCircle className="h-5 w-5" />
+          </button>
+        }
+      />
 
-      {/* progress */}
-      <div className="mb-6 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
-        <motion.div className="h-full rounded-full bg-brand-500" animate={{ width: `${progress}%` }} />
-      </div>
+      {phase === "intro" && (
+        <>
+          <div className="card dotted flex flex-col items-center p-8 text-center">
+            <div className="grid h-20 w-20 place-items-center rounded-full bg-brand-100 dark:bg-brand-500/20">
+              <Mic className="h-10 w-10 text-brand-600 dark:text-brand-300" />
+            </div>
+            <h2 className="mt-4 font-display text-2xl font-extrabold">Voice Earn</h2>
+            <p className="mt-2 text-slate-500 dark:text-slate-300">
+              Read one short sentence out loud, clearly. Get it right to earn{" "}
+              <span className="font-bold text-emerald-500">{formatNaira(p.perVoice)}</span>.
+            </p>
+            <p className="mt-2 text-sm text-slate-400">No timer — go at your own pace. Pick one language; finishing it completes your Voice Earn for the day.</p>
+          </div>
 
-      {phase !== "done" && (
-        <div className="card mb-6 min-h-[220px] p-6">
-          <p className="mb-3 text-sm font-semibold text-slate-400">
-            {phase === "idle" ? "Tap the mic and read every word aloud" : `Sentence ${sentenceIdx + 1} of ${sentences.length}`}
-          </p>
-          <p className="font-display text-2xl font-bold leading-relaxed">
-            {words.map((w, i) => (
-              <span
-                key={i}
-                className={cn(
-                  "transition-colors",
-                  phase === "reading" && i <= wordIdx ? "text-brand-500" : "text-slate-800 dark:text-slate-100",
-                  phase === "reading" && i === wordIdx && "underline decoration-brand-400 decoration-4 underline-offset-4",
-                )}
-              >
-                {w}{" "}
-              </span>
-            ))}
-          </p>
-        </div>
+          <button onClick={() => setLangSheet(true)} className="btn-primary mt-5 w-full py-4 text-lg">
+            <Play className="h-5 w-5" /> Start Session
+          </button>
+
+          <div className="mt-4 flex items-center gap-4 rounded-3xl bg-white p-4 shadow-soft dark:bg-white/[0.04]">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-brand-500 text-slate-900"><Mic className="h-5 w-5" /></span>
+            <div className="flex-1">
+              <p className="font-bold">Auto-start microphone</p>
+              <p className="text-sm text-slate-400">Start listening automatically each round</p>
+            </div>
+            <button onClick={() => setAutoStart((v) => !v)} className={cn("relative h-7 w-12 rounded-full transition", autoStart ? "bg-brand-500" : "bg-slate-300 dark:bg-white/20")}>
+              <span className={cn("absolute top-0.5 h-6 w-6 rounded-full bg-white transition-all", autoStart ? "left-[22px]" : "left-0.5")} />
+            </button>
+          </div>
+
+          {!supported && (
+            <p className="mt-4 rounded-2xl bg-amber-50 p-4 text-center text-sm font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+              Your browser can't access speech recognition — you can still complete the session by tapping “I read it”.
+            </p>
+          )}
+        </>
       )}
 
-      {phase === "done" ? (
+      {phase === "reading" && (
+        <>
+          <div className="card p-6">
+            <p className="text-center text-sm font-bold uppercase tracking-widest text-slate-400">Read this aloud</p>
+            <p className="mt-4 text-center font-display text-2xl font-extrabold leading-relaxed">
+              {words.map((w, i) => {
+                const hit = spokenNorm.split(" ").some((x) => normalize(w) && (x === normalize(w) || (x && normalize(w).startsWith(x) && x.length > 2)));
+                return (
+                  <span key={i} className={cn("transition-colors", hit ? "text-brand-600 dark:text-brand-400" : "text-slate-800 dark:text-slate-100")}>
+                    {w}{" "}
+                  </span>
+                );
+              })}
+            </p>
+
+            <div className="mt-6 flex flex-col items-center">
+              <button
+                onClick={listening ? stop : start}
+                disabled={!supported}
+                className={cn(
+                  "relative grid h-24 w-24 place-items-center rounded-full text-white shadow-glow transition active:scale-95",
+                  listening ? "bg-rose-500" : "bg-brand-500 text-slate-900",
+                )}
+              >
+                {listening && <span className="absolute inset-0 animate-pulseRing rounded-full ring-4 ring-rose-400/50" />}
+                {listening ? <Square className="h-9 w-9" /> : <Mic className="h-10 w-10" />}
+              </button>
+              <p className="mt-4 text-sm font-semibold text-slate-500">
+                {!supported ? "Speech not available on this browser" : listening ? "Listening… read the sentence" : "Tap the mic and read it aloud"}
+              </p>
+              {supported && (
+                <div className="mt-2 h-1.5 w-full max-w-[200px] overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
+                  <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${Math.min(100, Math.round(coverage * 100))}%` }} />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <button onClick={finish} disabled={busy} className="btn-primary mt-5 w-full py-4 text-lg">
+            {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Check className="h-5 w-5" /> {supported ? "Done — check my voice" : "I read it"}</>}
+          </button>
+        </>
+      )}
+
+      {phase === "done" && (
         <div className="card flex flex-col items-center p-8 text-center">
           <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="grid h-20 w-20 place-items-center rounded-full bg-emerald-100 dark:bg-emerald-500/20">
             <Check className="h-10 w-10 text-emerald-500" strokeWidth={3} />
           </motion.div>
           <h2 className="mt-4 font-display text-2xl font-extrabold">Session complete!</h2>
           <p className="mt-1 text-slate-400">Nicely read. Your reward has been added.</p>
-          <p className="mt-4 font-display text-4xl font-extrabold text-emerald-500">+{formatNaira(earnedAmt)}</p>
+          <p className="mt-4 font-display text-4xl font-extrabold text-emerald-500">+{formatNaira(earned)}</p>
           <div className="mt-6 flex w-full gap-3">
             <button onClick={() => nav("/earn")} className="btn-ghost flex-1 py-3.5">Back to Earn</button>
             <button onClick={() => nav("/wallet")} className="btn-primary flex-1 py-3.5">Withdraw</button>
           </div>
         </div>
-      ) : (
-        <div className="flex flex-col items-center">
-          <button
-            onClick={phase === "idle" ? startReading : undefined}
-            disabled={phase === "reading" || cooldownLeft > 0}
-            className="relative grid h-32 w-32 place-items-center rounded-full bg-gradient-to-br from-amber-400 to-amber-500 text-white shadow-glow transition active:scale-95 disabled:opacity-70"
-          >
-            {(phase === "reading" || cooldownLeft > 0) && (
-              <>
-                <span className="absolute inset-0 animate-pulseRing rounded-full ring-4 ring-amber-400/60" />
-                <span className="absolute inset-0 animate-pulseRing rounded-full ring-4 ring-amber-400/40 [animation-delay:0.6s]" />
-              </>
-            )}
-            {cooldownLeft > 0 ? <Clock className="h-14 w-14" /> : <Mic className="h-14 w-14" />}
-          </button>
-          <p className="mt-5 font-semibold text-slate-500">
-            {cooldownLeft > 0
-              ? `Cooldown · ${Math.ceil(cooldownLeft / 1000)}s`
-              : phase === "reading"
-                ? "Listening… keep reading"
-                : "Tap to start reading"}
-          </p>
-        </div>
       )}
+
+      <Sheet open={langSheet} onClose={() => setLangSheet(false)} title="Choose a language">
+        <p className="-mt-2 mb-3 text-sm text-slate-400">You only need to complete one</p>
+        <div className="space-y-2">
+          {VOICE_LANGS.map((l) => (
+            <button
+              key={l.key}
+              onClick={() => setLang(l)}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-2xl border-2 p-4 text-left transition",
+                lang.key === l.key ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10" : "border-slate-100 dark:border-white/10",
+              )}
+            >
+              <span className="text-2xl">{l.flag}</span>
+              <span className="font-bold">{l.label}</span>
+              <span className="text-sm text-slate-400">{l.sub}</span>
+            </button>
+          ))}
+        </div>
+        <button onClick={beginReading} className="btn-primary mt-4 w-full py-4 text-lg">
+          <Play className="h-5 w-5" /> Begin
+        </button>
+      </Sheet>
     </Layout>
   );
 }
 
-function Locked() {
-  const nav = useNavigate();
+function Locked({ nav }: { nav: ReturnType<typeof useNavigate> }) {
   return (
     <Layout hideNav>
       <PageHeader title="Voice Earn" to="/earn" />
       <div className="card mt-10 flex flex-col items-center p-8 text-center">
         <div className="grid h-20 w-20 place-items-center rounded-full bg-brand-100 dark:bg-brand-500/20">
-          <Crown className="h-10 w-10 text-brand-500" />
+          <Crown className="h-10 w-10 text-brand-600 dark:text-brand-300" />
         </div>
         <h2 className="mt-4 font-display text-2xl font-extrabold">Activate a plan first</h2>
         <p className="mt-1 text-slate-400">Voice Earn is unlocked once you activate any lifetime plan.</p>
