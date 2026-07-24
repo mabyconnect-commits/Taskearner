@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 // Build marker so we can confirm exactly which deployment is live via /api/health.
-const BUILD = "2026-07-24-logs";
+const BUILD = "2026-07-24-index-rewrite";
 
 // Stray async errors (e.g. from the pg driver on a cold connection) must not
 // crash the whole function — log them instead of letting the process die.
@@ -32,28 +32,38 @@ async function readBody(req: VercelRequest): Promise<any> {
   }
 }
 
-// Single catch-all function. Everything runs inside try/catch so any failure —
-// including an import-time throw — is returned as readable JSON instead of an
-// opaque FUNCTION_INVOCATION_FAILED crash page.
+// Single API function. All /api/* requests are rewritten (see vercel.json) to
+// this function with the sub-path carried in the `__p` query param, which
+// sidesteps Vercel's flaky nested catch-all routing. Everything runs inside
+// try/catch so any failure returns readable JSON, not an opaque crash page.
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   res.setHeader("x-taskearner-build", BUILD);
-  const t0 = Date.now();
   try {
     const method = (req.method || "GET").toUpperCase();
-    console.log(`[req] ${method} ${req.url}`);
-    const body = method === "GET" || method === "HEAD" ? undefined : await readBody(req);
-    console.log(`[req] ${method} ${req.url} body-read ${Date.now() - t0}ms`);
-
-    const { handleApi } = await import("./_router.js");
-
     const url = new URL(req.url || "/", "http://localhost");
-    let path = url.pathname.replace(/^\/api/, "") || "/";
+
+    // Prefer the rewritten sub-path (__p); fall back to stripping /api from the path.
+    const rewritten = url.searchParams.get("__p");
+    let path: string;
+    if (rewritten !== null) {
+      path = "/" + rewritten.replace(/^\/+/, "");
+    } else {
+      path = url.pathname.replace(/^\/api/, "") || "/";
+    }
     if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
 
+    // Pass through real query params (drop our internal __p).
+    const query: Record<string, string> = {};
+    url.searchParams.forEach((v, k) => { if (k !== "__p") query[k] = v; });
+
+    console.log(`[req] ${method} ${path}`);
+    const body = method === "GET" || method === "HEAD" ? undefined : await readBody(req);
+
+    const { handleApi } = await import("./_router.js");
     const result = await handleApi({
       method,
       path,
-      query: Object.fromEntries(url.searchParams.entries()),
+      query,
       headers: req.headers as Record<string, string | string[] | undefined>,
       body,
     });

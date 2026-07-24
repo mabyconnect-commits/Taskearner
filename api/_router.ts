@@ -567,7 +567,7 @@ async function health(): Promise<ApiResponse> {
   }
   return ok({
     ok: connected,
-    build: "2026-07-24-logs",
+    build: "2026-07-24-index-rewrite",
     provider: getProvider().name,
     db: {
       configured: !!envVar,
@@ -602,7 +602,7 @@ async function selftest(): Promise<ApiResponse> {
     steps.insertUser = "FAIL: " + String(e?.message || e).slice(0, 250);
   }
   const allOk = Object.values(steps).every((v) => v === "ok");
-  return ok({ selftest: allOk ? "PASS" : "FAIL", build: "2026-07-24-logs", steps });
+  return ok({ selftest: allOk ? "PASS" : "FAIL", build: "2026-07-24-index-rewrite", steps });
 }
 
 // ── Public marketplace (tasks + sponsored feeds) ─────────────────────────────
@@ -911,7 +911,7 @@ export async function handleApi(req: ApiRequest): Promise<ApiResponse> {
     if (key === "GET /health") return await health();
     if (key === "GET /selftest") return await selftest();
     // Two-segment GET to confirm nested paths reach the function (routing test).
-    if (key === "GET /diag/ping") return ok({ pong: true, path: req.path, build: "2026-07-24-logs" });
+    if (key === "GET /diag/ping") return ok({ pong: true, path: req.path, build: "2026-07-24-index-rewrite" });
     await ensureSchema();
     const handler = routes[key];
     if (!handler) return err(`No route for ${key}`, 404);
