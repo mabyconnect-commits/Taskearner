@@ -585,7 +585,7 @@ async function health(): Promise<ApiResponse> {
   }
   return ok({
     ok: connected,
-    build: "2026-07-24-index-rewrite",
+    build: "2026-07-24-nekpay-diag",
     provider: getProvider().name,
     db: {
       configured: !!envVar,
@@ -593,6 +593,15 @@ async function health(): Promise<ApiResponse> {
       connected,
       migrated,
       ...(error ? { error } : {}),
+    },
+    // Which NEKpay settings the server actually sees (values hidden; only set/MISSING).
+    nekpay: {
+      mchId: ENV.NEKPAY_MCH_ID ? "set" : "MISSING",
+      payInKey: ENV.NEKPAY_KEY ? "set" : "MISSING",
+      payType: ENV.NEKPAY_PAY_TYPE ? "set" : "MISSING",
+      apiUrl: ENV.NEKPAY_API_URL,
+      relayUrl: ENV.NEKPAY_RELAY_URL ? "set" : "MISSING",
+      relaySecret: ENV.NEKPAY_RELAY_SECRET ? "set" : "MISSING",
     },
   });
 }
