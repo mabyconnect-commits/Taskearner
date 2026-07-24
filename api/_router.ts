@@ -579,6 +579,32 @@ async function health(): Promise<ApiResponse> {
   });
 }
 
+// Browser-loadable diagnostic that runs the exact signup DB path (schema +
+// hash + insert + serialize) and reports where it fails, as JSON.
+async function selftest(): Promise<ApiResponse> {
+  const steps: Record<string, string> = {};
+  try { await ensureSchema(); steps.ensureSchema = "ok"; } catch (e: any) { steps.ensureSchema = "FAIL: " + String(e?.message || e).slice(0, 200); }
+  let hash = "";
+  try { hash = await hashPassword("selftest-password"); steps.hashPassword = "ok"; } catch (e: any) { steps.hashPassword = "FAIL: " + String(e?.message || e).slice(0, 200); }
+  try {
+    const email = `selftest_${Date.now()}@selftest.local`;
+    const username = `selftest_${Date.now().toString(36)}`;
+    const [u] = await sql`
+      INSERT INTO users (name, username, email, password_hash)
+      VALUES ('Self Test', ${username}, ${email}, ${hash || "x"})
+      RETURNING *`;
+    steps.insertUser = "ok";
+    try { serializeUser(u); steps.serializeUser = "ok"; } catch (e: any) { steps.serializeUser = "FAIL: " + String(e?.message || e).slice(0, 200); }
+    try { signToken(u.id); steps.signToken = "ok"; } catch (e: any) { steps.signToken = "FAIL: " + String(e?.message || e).slice(0, 200); }
+    await sql`DELETE FROM users WHERE id = ${u.id}`;
+    steps.cleanup = "ok";
+  } catch (e: any) {
+    steps.insertUser = "FAIL: " + String(e?.message || e).slice(0, 250);
+  }
+  const allOk = Object.values(steps).every((v) => v === "ok");
+  return ok({ selftest: allOk ? "PASS" : "FAIL", build: "2026-07-24-esm-maxdur60", steps });
+}
+
 // ── Public marketplace (tasks + sponsored feeds) ─────────────────────────────
 
 async function getTasks(req: ApiRequest): Promise<ApiResponse> {
@@ -883,6 +909,7 @@ export async function handleApi(req: ApiRequest): Promise<ApiResponse> {
     // Health check runs before ensureSchema so it can report DB status
     // even when the database isn't configured/reachable.
     if (key === "GET /health") return await health();
+    if (key === "GET /selftest") return await selftest();
     await ensureSchema();
     const handler = routes[key];
     if (!handler) return err(`No route for ${key}`, 404);
