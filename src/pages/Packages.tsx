@@ -24,7 +24,7 @@ export default function Packages() {
       <PageHeader title="Plans & Pricing" subtitle="Activate instantly with your deposit balance" to="/dashboard" />
 
       {/* deposit banner */}
-      <div className="overflow-hidden rounded-4xl bg-gradient-to-br from-[#1c1230] via-[#241a3a] to-[#0f0a18] p-6 text-white shadow-card">
+      <div className="overflow-hidden rounded-4xl bg-gradient-to-br from-ink-800 via-ink-900 to-ink-950 p-6 text-white shadow-card">
         <p className="text-sm text-white/60">Your deposit balance</p>
         <p className="mt-1 font-display text-4xl font-extrabold">{formatNaira(deposit)}</p>
         <button onClick={() => nav("/deposit")} className="btn mt-4 bg-white px-5 py-3 text-brand-700">
@@ -47,7 +47,7 @@ export default function Packages() {
           return (
             <div key={p.id} className={cn("overflow-hidden rounded-4xl shadow-card", p.popular && "ring-2 ring-brand-400")}>
               {/* header */}
-              <div className="relative bg-gradient-to-br from-[#1c1230] via-[#2a1a44] to-[#0f0a18] p-6 text-white">
+              <div className="relative bg-gradient-to-br from-ink-800 via-ink-900 to-ink-950 p-6 text-white">
                 {p.popular && (
                   <span className="absolute right-5 top-5 rounded-full bg-amber-400 px-3 py-1 text-xs font-extrabold text-brand-900">
                     ⭐ POPULAR

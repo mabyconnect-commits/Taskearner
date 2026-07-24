@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useStore } from "@/store/useStore";
 import { ToastProvider } from "@/components/ui/Toast";
+import { LogoMark } from "@/components/Logo";
 
 import Landing from "@/pages/Landing";
 import Auth from "@/pages/Auth";
@@ -46,12 +47,13 @@ export default function App() {
 
   if (booting) {
     return (
-      <div className="grid min-h-full place-items-center bg-gradient-to-b from-brand-600 to-[#2b0644]">
+      <div className="grid min-h-full place-items-center bg-gradient-to-b from-ink-900 to-ink-950">
         <div className="flex flex-col items-center gap-4 text-white">
-          <div className="grid h-16 w-16 place-items-center rounded-3xl bg-white/15 ring-1 ring-white/25">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-          </div>
-          <p className="font-display text-lg font-bold">Task Earner Africa</p>
+          <LogoMark className="h-16 w-16 animate-pulse" />
+          <p className="font-sans text-lg font-extrabold tracking-tight">
+            Task<span className="text-brand-400">Earner</span>
+          </p>
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/25 border-t-brand-400" />
         </div>
       </div>
     );

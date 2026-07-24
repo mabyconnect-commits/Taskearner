@@ -55,7 +55,7 @@ export default function Deposit() {
     <Layout>
       <PageHeader title="Fund Wallet" subtitle="Add money to your wallet" to="/dashboard" />
 
-      <div className="overflow-hidden rounded-4xl bg-gradient-to-br from-[#1c1230] via-[#241a3a] to-[#0f0a18] p-6 text-white shadow-card">
+      <div className="overflow-hidden rounded-4xl bg-gradient-to-br from-ink-800 via-ink-900 to-ink-950 p-6 text-white shadow-card">
         <p className="text-sm text-white/60">Deposit Balance</p>
         <p className="mt-1 font-display text-4xl font-extrabold">{formatNaira(deposit)}</p>
         <p className="mt-1 text-sm text-white/50">Use this to activate or upgrade your plan</p>
@@ -91,7 +91,7 @@ export default function Deposit() {
       </div>
 
       <button onClick={() => nav("/packages")} className="mt-4 flex w-full items-center gap-4 rounded-3xl bg-brand-50 p-5 text-left dark:bg-brand-500/10">
-        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-brand-500 text-white">
+        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-brand-500 text-slate-900">
           <Rocket className="h-6 w-6" />
         </div>
         <div className="flex-1">

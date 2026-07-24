@@ -1,7 +1,8 @@
 import { Link, Navigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Mic, MousePointerClick, Wallet, Banknote, Globe } from "lucide-react";
+import { MousePointerClick, Wallet, Banknote, Globe } from "lucide-react";
 import { useStore } from "@/store/useStore";
+import { LogoMark } from "@/components/Logo";
 
 const steps = [
   { icon: MousePointerClick, t: "Choose", d: "Pick a voice recording task or a simple digital task from your dashboard." },
@@ -14,14 +15,14 @@ export default function Landing() {
   if (authed) return <Navigate to="/dashboard" replace />;
 
   return (
-    <div className="relative mx-auto flex min-h-full max-w-md flex-col overflow-hidden bg-gradient-to-b from-brand-600 via-brand-700 to-[#2b0644] px-6 pb-10 pt-14 text-white">
+    <div className="relative mx-auto flex min-h-full max-w-md flex-col overflow-hidden bg-gradient-to-b from-ink-900 via-ink-950 to-black px-6 pb-10 pt-14 text-white">
       {/* glow blobs */}
-      <div className="pointer-events-none absolute -left-20 top-10 h-64 w-64 rounded-full bg-brand-400/40 blur-3xl" />
-      <div className="pointer-events-none absolute -right-16 top-44 h-56 w-56 rounded-full bg-fuchsia-500/30 blur-3xl" />
+      <div className="pointer-events-none absolute -left-20 top-10 h-64 w-64 rounded-full bg-brand-500/25 blur-3xl" />
+      <div className="pointer-events-none absolute -right-16 top-44 h-56 w-56 rounded-full bg-brand-400/15 blur-3xl" />
 
       <div className="relative mb-8 flex items-center justify-center gap-2">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold ring-1 ring-white/20">
-          <Globe className="h-3.5 w-3.5 text-amber-300" /> Made for Africa
+          <Globe className="h-3.5 w-3.5 text-brand-400" /> Made for Africa
         </span>
       </div>
 
@@ -29,14 +30,19 @@ export default function Landing() {
         initial={{ scale: 0.6, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: "spring", damping: 14 }}
-        className="relative mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-white/15 ring-1 ring-white/25 backdrop-blur"
+        className="relative mx-auto"
       >
-        <span className="absolute inset-0 animate-pulseRing rounded-3xl ring-2 ring-white/40" />
-        <Mic className="h-10 w-10" />
+        <span className="absolute inset-0 animate-pulseRing rounded-full ring-2 ring-brand-500/40" />
+        <LogoMark className="h-24 w-24 drop-shadow-[0_8px_30px_rgba(245,197,24,0.35)]" />
       </motion.div>
 
-      <h1 className="mt-7 text-center font-display text-[44px] font-extrabold leading-[1.05]">
-        Your voice is <span className="text-amber-300">currency.</span>
+      <p className="mt-5 text-center font-sans text-2xl font-extrabold tracking-tight">
+        Task<span className="text-brand-400">Earner</span>
+        <span className="ml-2 rounded-md bg-brand-500 px-1.5 py-0.5 align-middle text-xs font-extrabold uppercase text-slate-900">Africa</span>
+      </p>
+
+      <h1 className="mt-4 text-center font-display text-[42px] font-extrabold leading-[1.05]">
+        Your voice is <span className="text-brand-400">currency.</span>
       </h1>
       <p className="mt-4 text-center text-lg text-white/80">
         Task Earner Africa lets everyday Africans turn their voice — and simple daily tasks — into pure cash. 💸
@@ -55,8 +61,8 @@ export default function Landing() {
             className="flex items-center gap-4 rounded-2xl bg-white/10 p-4 ring-1 ring-white/10 backdrop-blur"
           >
             <div className="relative grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/15">
-              <s.icon className="h-5 w-5 text-amber-300" />
-              <span className="absolute -left-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-amber-400 text-[11px] font-extrabold text-brand-900">
+              <s.icon className="h-5 w-5 text-brand-400" />
+              <span className="absolute -left-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-brand-500 text-[11px] font-extrabold text-slate-900">
                 {i + 1}
               </span>
             </div>
@@ -69,7 +75,7 @@ export default function Landing() {
       </div>
 
       <div className="mt-auto space-y-3 pt-9">
-        <Link to="/auth" className="btn w-full bg-white py-4 text-lg text-brand-700 shadow-xl">
+        <Link to="/auth" className="btn w-full bg-brand-500 py-4 text-lg text-slate-900 shadow-glow">
           Start earning — it's free
         </Link>
         <Link to="/auth?mode=login" className="btn w-full bg-white/10 py-4 text-lg text-white ring-1 ring-white/20">

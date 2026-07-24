@@ -1,8 +1,9 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Mic, Mail, Lock, User as UserIcon, ArrowLeft, Loader2 } from "lucide-react";
+import { Mail, Lock, User as UserIcon, ArrowLeft, Loader2 } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { useToast } from "@/components/ui/Toast";
+import { Logo } from "@/components/Logo";
 
 export default function Auth() {
   const [params] = useSearchParams();
@@ -43,11 +44,8 @@ export default function Auth() {
         <ArrowLeft className="h-5 w-5" />
       </Link>
 
-      <div className="mt-8 flex items-center gap-3">
-        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-brand-500 text-white shadow-glow">
-          <Mic className="h-6 w-6" />
-        </div>
-        <span className="font-display text-2xl font-extrabold">Task Earner <span className="text-brand-500">Africa</span></span>
+      <div className="mt-8">
+        <Logo markClass="h-12 w-12" showTagline />
       </div>
 
       <h1 className="mt-8 font-display text-3xl font-extrabold">

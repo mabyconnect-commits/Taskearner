@@ -49,7 +49,7 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
             className="fixed inset-y-0 left-0 z-[71] flex w-[82%] max-w-sm flex-col bg-white p-5 shadow-2xl dark:bg-[#100b16]"
           >
             <div className="flex items-center gap-3">
-              <div className="grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-xl font-bold text-white">
+              <div className="grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-ink-800 to-ink-950 text-xl font-bold text-white">
                 {name ? name[0].toUpperCase() : "V"}
               </div>
               <div className="min-w-0 flex-1">
@@ -68,7 +68,7 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
                   onClick={() => setTheme("light")}
                   className={cn(
                     "flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition",
-                    theme === "light" ? "bg-brand-500 text-white shadow" : "text-slate-500",
+                    theme === "light" ? "bg-brand-500 text-slate-900 shadow" : "text-slate-500",
                   )}
                 >
                   <Sun className="h-4 w-4" /> Light
@@ -77,7 +77,7 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
                   onClick={() => setTheme("dark")}
                   className={cn(
                     "flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition",
-                    theme === "dark" ? "bg-brand-500 text-white shadow" : "text-slate-500",
+                    theme === "dark" ? "bg-brand-500 text-slate-900 shadow" : "text-slate-500",
                   )}
                 >
                   <Moon className="h-4 w-4" /> Dark
@@ -92,7 +92,7 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
                   onClick={() => go(to)}
                   className="flex w-full items-center gap-4 rounded-2xl px-3 py-3 text-left font-semibold text-slate-700 transition hover:bg-brand-50 dark:text-slate-200 dark:hover:bg-white/5"
                 >
-                  <Icon className="h-6 w-6 text-brand-500" strokeWidth={2.1} />
+                  <Icon className="h-6 w-6 text-brand-600" strokeWidth={2.1} />
                   {label}
                 </button>
               ))}

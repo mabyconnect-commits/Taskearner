@@ -25,7 +25,7 @@ export function BottomNav() {
                 <span
                   className={cn(
                     "grid h-10 w-14 place-items-center rounded-2xl transition-all",
-                    isActive ? "bg-brand-500 text-white shadow-glow" : "text-slate-400 dark:text-slate-500",
+                    isActive ? "bg-brand-500 text-slate-900 shadow-glow" : "text-slate-400 dark:text-slate-500",
                   )}
                 >
                   <Icon className="h-[22px] w-[22px]" strokeWidth={isActive ? 2.4 : 2} />

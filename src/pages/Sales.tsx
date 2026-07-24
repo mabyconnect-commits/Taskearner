@@ -54,7 +54,7 @@ export default function Sales() {
       </div>
 
       {/* commission card */}
-      <div className="mt-4 overflow-hidden rounded-4xl bg-gradient-to-br from-[#1c1230] via-[#2a1a44] to-[#0f0a18] p-6 text-white shadow-card">
+      <div className="mt-4 overflow-hidden rounded-4xl bg-gradient-to-br from-ink-800 via-ink-900 to-ink-950 p-6 text-white shadow-card">
         <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white text-brand-700">
           <Coins className="h-6 w-6" />
         </div>
@@ -127,7 +127,7 @@ export default function Sales() {
           <div className="space-y-2">
             {referrals.map((r) => (
               <div key={r.id} className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-soft dark:bg-white/[0.04]">
-                <div className="grid h-11 w-11 place-items-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 font-bold text-white">
+                <div className="grid h-11 w-11 place-items-center rounded-full bg-gradient-to-br from-ink-800 to-ink-950 font-bold text-white">
                   {r.name[0]}
                 </div>
                 <div className="flex-1">

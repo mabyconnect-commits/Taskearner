@@ -72,7 +72,7 @@ export default function Dashboard() {
         <button onClick={() => setDrawer(true)} className="grid h-11 w-11 place-items-center rounded-full bg-slate-100 dark:bg-white/10">
           <Menu className="h-5 w-5" />
         </button>
-        <button onClick={() => nav("/profile")} className="grid h-11 w-11 place-items-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 font-bold text-white">
+        <button onClick={() => nav("/profile")} className="grid h-11 w-11 place-items-center rounded-full bg-ink-900 font-bold text-brand-400">
           {first[0].toUpperCase()}
         </button>
         <div className="min-w-0 flex-1">
@@ -153,7 +153,7 @@ export default function Dashboard() {
       {nextStep && (
         <button
           onClick={() => nav(nextStep.to)}
-          className="relative mt-7 flex w-full items-center gap-4 overflow-hidden rounded-4xl bg-gradient-to-br from-brand-500 via-brand-600 to-brand-800 p-5 text-left text-white shadow-card"
+          className="relative mt-7 flex w-full items-center gap-4 overflow-hidden rounded-4xl bg-gradient-to-br from-ink-800 via-ink-900 to-ink-950 p-5 text-left text-white shadow-card"
         >
           <div className="pointer-events-none absolute -right-6 -top-8 h-32 w-32 rounded-full bg-white/10" />
           <div className="relative grid h-16 w-16 shrink-0 place-items-center">
@@ -172,7 +172,7 @@ export default function Dashboard() {
             <p className="font-display text-xl font-extrabold leading-tight">{nextStep.label}</p>
             <p className="text-sm text-white/70">{nextStep.sub}</p>
           </div>
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-brand-600">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-500 text-slate-900">
             <ArrowRight className="h-5 w-5" />
           </span>
         </button>
@@ -247,7 +247,7 @@ export default function Dashboard() {
       {/* floating upgrade */}
       <button
         onClick={() => nav("/packages")}
-        className="fixed bottom-28 right-[max(16px,calc(50%-224px+16px))] z-30 grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-glow transition active:scale-90"
+        className="fixed bottom-28 right-[max(16px,calc(50%-224px+16px))] z-30 grid h-14 w-14 place-items-center rounded-full bg-brand-500 text-slate-900 shadow-glow transition active:scale-90"
         aria-label="Upgrade plan"
       >
         <Crown className="h-6 w-6" />

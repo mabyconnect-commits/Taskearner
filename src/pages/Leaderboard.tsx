@@ -36,7 +36,7 @@ export default function Leaderboard() {
               </div>
               <p className="mt-1 truncate text-xs font-bold">{u.name.split(" ")[0]}</p>
               <p className="text-[11px] font-semibold text-emerald-500">{formatNaira(u.earned, false)}</p>
-              <div className={cn("mt-1 w-full rounded-t-2xl bg-gradient-to-b from-brand-400 to-brand-600 text-center text-white", h)}>
+              <div className={cn("mt-1 w-full rounded-t-2xl bg-gradient-to-b from-brand-400 to-brand-600 text-center text-slate-900", h)}>
                 <span className="inline-block pt-2 font-display text-2xl font-extrabold">{idx + 1}</span>
               </div>
             </div>
@@ -45,11 +45,11 @@ export default function Leaderboard() {
       </div>
 
       {/* your rank */}
-      <div className="mb-4 flex items-center gap-3 rounded-3xl bg-gradient-to-r from-brand-500 to-brand-700 p-4 text-white shadow-glow">
-        <span className="grid h-11 w-11 place-items-center rounded-full bg-white/20 font-extrabold">—</span>
+      <div className="mb-4 flex items-center gap-3 rounded-3xl bg-brand-500 p-4 text-slate-900 shadow-glow">
+        <span className="grid h-11 w-11 place-items-center rounded-full bg-black/10 font-extrabold">—</span>
         <div className="flex-1">
           <p className="font-bold">{name || "You"}</p>
-          <p className="text-xs text-white/70">{referrals.length} referrals</p>
+          <p className="text-xs text-slate-800/70">{referrals.length} referrals</p>
         </div>
         <span className="font-display font-extrabold">{formatNaira(sales, false)}</span>
       </div>
@@ -58,7 +58,7 @@ export default function Leaderboard() {
         {TOP.slice(3).map((u, i) => (
           <div key={u.handle} className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-soft dark:bg-white/[0.04]">
             <span className="w-6 text-center font-display font-extrabold text-slate-400">{i + 4}</span>
-            <div className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 font-bold text-white">{u.name[0]}</div>
+            <div className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-ink-800 to-ink-950 font-bold text-white">{u.name[0]}</div>
             <div className="flex-1">
               <p className="font-bold">{u.name}</p>
               <p className="text-xs text-slate-400">@{u.handle} · {u.refs} refs</p>

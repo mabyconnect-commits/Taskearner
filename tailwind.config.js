@@ -6,17 +6,23 @@ export default {
     extend: {
       colors: {
         brand: {
-          50: "#f6f0fe",
-          100: "#ecdffd",
-          200: "#dabefb",
-          300: "#c295f6",
-          400: "#a866ef",
-          500: "#8b2fd6", // primary
-          600: "#7a1fc4",
-          700: "#66179f",
-          800: "#54167f",
-          900: "#451568",
-          950: "#2b0644",
+          50: "#fffdf0",
+          100: "#fff9d6",
+          200: "#fff0a8",
+          300: "#ffe470",
+          400: "#fdd53f",
+          500: "#f5c518", // primary gold-yellow
+          600: "#d9a406",
+          700: "#a97b07",
+          800: "#875f0e",
+          900: "#724f12",
+          950: "#432c02",
+        },
+        // warm near-black used for dark surfaces / cards
+        ink: {
+          800: "#1a160b",
+          900: "#141109",
+          950: "#0b0905",
         },
       },
       fontFamily: {
@@ -28,9 +34,9 @@ export default {
         "5xl": "2.5rem",
       },
       boxShadow: {
-        card: "0 10px 40px -12px rgba(124, 31, 196, 0.18)",
-        glow: "0 0 60px -10px rgba(139, 47, 214, 0.55)",
-        soft: "0 8px 30px -8px rgba(17, 12, 46, 0.10)",
+        card: "0 10px 40px -12px rgba(180, 140, 10, 0.18)",
+        glow: "0 8px 30px -6px rgba(245, 197, 24, 0.55)",
+        soft: "0 8px 30px -8px rgba(30, 25, 10, 0.10)",
       },
       keyframes: {
         "fade-up": {

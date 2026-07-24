@@ -62,8 +62,8 @@ export default function Bills() {
         </div>
       ) : (
         <>
-          <div className="mb-5 flex items-center gap-4 rounded-4xl bg-gradient-to-br from-brand-500 to-brand-700 p-5 text-white shadow-card">
-            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white/15"><Icon className="h-7 w-7" /></div>
+          <div className="mb-5 flex items-center gap-4 rounded-4xl bg-gradient-to-br from-ink-800 via-ink-900 to-ink-950 p-5 text-white shadow-card">
+            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-brand-500/20 text-brand-400"><Icon className="h-7 w-7" /></div>
             <div>
               <p className="text-sm text-white/70">Wallet balance</p>
               <p className="font-display text-2xl font-extrabold">{formatNaira(wallet)}</p>
@@ -75,7 +75,7 @@ export default function Bills() {
               <span className="mb-2 block text-sm font-semibold text-slate-500">Provider</span>
               <div className="flex flex-wrap gap-2">
                 {cfg.providers.map((pv) => (
-                  <button key={pv} onClick={() => setProvider(pv)} className={cn("rounded-xl px-4 py-2.5 text-sm font-bold transition", provider === pv ? "bg-brand-500 text-white" : "bg-slate-100 text-slate-500 dark:bg-white/5")}>
+                  <button key={pv} onClick={() => setProvider(pv)} className={cn("rounded-xl px-4 py-2.5 text-sm font-bold transition", provider === pv ? "bg-brand-500 text-slate-900" : "bg-slate-100 text-slate-500 dark:bg-white/5")}>
                     {pv}
                   </button>
                 ))}

@@ -42,11 +42,11 @@ export default function Profile() {
       </div>
 
       {/* profile card */}
-      <div className="relative overflow-hidden rounded-4xl bg-gradient-to-br from-[#1c1230] via-[#2a1a44] to-[#0f0a18] p-6 text-center text-white shadow-card">
+      <div className="relative overflow-hidden rounded-4xl bg-gradient-to-br from-ink-800 via-ink-900 to-ink-950 p-6 text-center text-white shadow-card">
         <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-brand-500/30 blur-2xl" />
         <div className="relative mx-auto w-fit">
-          <div className="grid h-24 w-24 place-items-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-4xl font-extrabold ring-4 ring-amber-300/60">
-            {(name || "V")[0].toUpperCase()}
+          <div className="grid h-24 w-24 place-items-center rounded-full bg-gradient-to-br from-ink-800 to-ink-950 text-4xl font-extrabold ring-4 ring-amber-300/60">
+            {(name || "T")[0].toUpperCase()}
           </div>
           <button className="absolute bottom-0 right-0 grid h-8 w-8 place-items-center rounded-full bg-white text-brand-700">
             <Camera className="h-4 w-4" />

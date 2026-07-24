@@ -36,7 +36,7 @@ export default function WalletPage() {
       />
 
       {/* total withdrawn */}
-      <div className="overflow-hidden rounded-4xl bg-gradient-to-br from-brand-500 via-brand-600 to-brand-800 p-6 text-white shadow-card">
+      <div className="overflow-hidden rounded-4xl bg-gradient-to-br from-ink-800 via-ink-900 to-ink-950 p-6 text-white shadow-card">
         <p className="flex items-center gap-2 text-sm text-white/70">
           <ArrowUp className="h-4 w-4" /> Total withdrawn all-time
         </p>
@@ -51,7 +51,7 @@ export default function WalletPage() {
             onClick={() => setTab(t)}
             className={cn(
               "flex-1 rounded-xl py-3 text-sm font-bold capitalize transition",
-              tab === t ? "bg-brand-500 text-white shadow" : "text-slate-500",
+              tab === t ? "bg-brand-500 text-slate-900 shadow" : "text-slate-500",
             )}
           >
             {t} wallet
