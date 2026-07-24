@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Smartphone, Wifi, Zap, Tv, Loader2, Check } from "lucide-react";
+import { Smartphone, Wifi, Zap, Tv, Loader2, Rocket } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useStore } from "@/store/useStore";
@@ -19,45 +19,40 @@ export default function Bills() {
   const { type = "airtime" } = useParams();
   const nav = useNavigate();
   const toast = useToast();
-  const { deposit, engagement, payBill } = useStore();
+  const { deposit, engagement } = useStore();
   const cfg = CONFIG[type] ?? CONFIG.airtime;
 
   const [provider, setProvider] = useState(cfg.providers[0]);
   const [target, setTarget] = useState("");
   const [amt, setAmt] = useState("");
-  const [stage, setStage] = useState<"form" | "processing" | "done">("form");
+  const [stage, setStage] = useState<"form" | "processing" | "soon">("form");
   const n = Number(amt) || 0;
   const wallet = deposit + engagement;
 
   const pay = () => {
     if (!target.trim()) return toast(`Enter a valid ${cfg.fields.toLowerCase()}`, "error");
     if (n < 50) return toast("Enter an amount of at least ₦50", "error");
-    if (n > wallet) return toast("Insufficient wallet balance", "error");
+    // Bill delivery isn't live yet — show "coming soon", never deduct.
     setStage("processing");
-    setTimeout(async () => {
-      const res = await payBill({ amount: n, title: `${cfg.title}: ${provider} ${target}` });
-      if (!res.ok) {
-        toast(res.msg, "error");
-        setStage("form");
-        return;
-      }
-      setStage("done");
-    }, 1200);
+    setTimeout(() => setStage("soon"), 900);
   };
 
   const Icon = cfg.icon;
 
   return (
     <Layout hideNav>
-      <PageHeader title={cfg.title} subtitle="Instant & secure" to="/dashboard" />
+      <PageHeader title={cfg.title} subtitle="Coming soon" to="/dashboard" />
 
-      {stage === "done" ? (
+      {stage === "soon" ? (
         <div className="card mt-8 flex flex-col items-center p-8 text-center">
-          <div className="grid h-20 w-20 place-items-center rounded-full bg-emerald-100 dark:bg-emerald-500/20">
-            <Check className="h-10 w-10 text-emerald-500" strokeWidth={3} />
+          <div className="grid h-20 w-20 place-items-center rounded-full bg-brand-100 dark:bg-brand-500/20">
+            <Rocket className="h-10 w-10 text-brand-600 dark:text-brand-300" />
           </div>
-          <h2 className="mt-4 font-display text-2xl font-extrabold">Successful!</h2>
-          <p className="mt-1 text-slate-400">{formatNaira(n)} {cfg.title.toLowerCase()} to {target} was successful.</p>
+          <h2 className="mt-4 font-display text-2xl font-extrabold">Coming soon 🚀</h2>
+          <p className="mt-2 text-slate-500 dark:text-slate-300">
+            {cfg.title} isn't live just yet — we're finishing the payments integration. <b>No money was deducted.</b>
+          </p>
+          <p className="mt-1 text-sm text-slate-400">You'll be able to pay bills straight from your wallet very soon.</p>
           <button onClick={() => nav("/dashboard")} className="btn-primary mt-6 w-full py-4">Back to Home</button>
         </div>
       ) : (
