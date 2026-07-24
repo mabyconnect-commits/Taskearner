@@ -1,7 +1,7 @@
-import { sql, num } from "./db";
-import { HttpError } from "./http";
-import { planOf, dailyMax, utcDay } from "./plans";
-import { ENV } from "./env";
+import { sql, num } from "./db.js";
+import { HttpError } from "./http.js";
+import { planOf, dailyMax, utcDay } from "./plans.js";
+import { ENV } from "./env.js";
 
 export interface Bank {
   bankName: string;

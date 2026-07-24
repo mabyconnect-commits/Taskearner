@@ -1,12 +1,12 @@
 import crypto from "node:crypto";
-import { ensureSchema, sql, num } from "./_lib/db";
-import { ApiRequest, ApiResponse, HttpError, ok, err, textResp } from "./_lib/http";
-import { comparePassword, hashPassword, requireAuth, signToken } from "./_lib/auth";
-import { PLANS, planOf, SALES_WITHDRAW_MIN, COOLDOWN_MS, WORD_ROUNDS, dailyMax, utcDay, depositTax, depositTotal, withdrawFee, withdrawNet } from "./_lib/plans";
-import { loadState, serializeUser, isAdminEmail } from "./_lib/state";
-import { getProvider } from "./_lib/payments";
-import { resolveBank, isInstantPayable } from "./_lib/payments/banks";
-import { ENV } from "./_lib/env";
+import { ensureSchema, sql, num } from "./_lib/db.js";
+import { ApiRequest, ApiResponse, HttpError, ok, err, textResp } from "./_lib/http.js";
+import { comparePassword, hashPassword, requireAuth, signToken } from "./_lib/auth.js";
+import { PLANS, planOf, SALES_WITHDRAW_MIN, COOLDOWN_MS, WORD_ROUNDS, dailyMax, utcDay, depositTax, depositTotal, withdrawFee, withdrawNet } from "./_lib/plans.js";
+import { loadState, serializeUser, isAdminEmail } from "./_lib/state.js";
+import { getProvider } from "./_lib/payments/index.js";
+import { resolveBank, isInstantPayable } from "./_lib/payments/banks.js";
+import { ENV } from "./_lib/env.js";
 
 function formatNgn(n: number): string {
   return `₦${Math.round(n).toLocaleString("en-NG")}`;

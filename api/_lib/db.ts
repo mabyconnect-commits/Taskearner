@@ -1,5 +1,5 @@
 import postgres from "postgres";
-import { ENV } from "./env";
+import { ENV } from "./env.js";
 
 // Reuse the connection across serverless invocations (Vercel keeps the module
 // warm between requests on the same instance).

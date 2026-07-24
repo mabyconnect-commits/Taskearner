@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
-import { ENV } from "../env";
+import { ENV } from "../env.js";
 import {
   CallbackResult, CreateOrderInput, CreateOrderResult, PaymentProvider, PayoutInput, PayoutResult, QueryOrderResult,
-} from "./types";
+} from "./types.js";
 
 // ── MD5 signing (§3) ─────────────────────────────────────────────────────────
 function sign(params: Record<string, string | number | undefined | null>, key: string): string {

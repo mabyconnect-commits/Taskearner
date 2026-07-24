@@ -1,4 +1,4 @@
-import { CallbackResult, CreateOrderInput, CreateOrderResult, PaymentProvider, PayoutInput, PayoutResult, QueryOrderResult } from "./types";
+import { CallbackResult, CreateOrderInput, CreateOrderResult, PaymentProvider, PayoutInput, PayoutResult, QueryOrderResult } from "./types.js";
 
 // Mock provider: settles instantly, no external calls. Lets the whole
 // deposit/withdrawal flow run before real NEKpay keys are configured.

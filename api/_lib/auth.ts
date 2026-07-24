@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
-import { ENV } from "./env";
-import { ApiRequest, HttpError } from "./http";
+import { ENV } from "./env.js";
+import { ApiRequest, HttpError } from "./http.js";
 
 // Auth implemented with Node's built-in crypto only — no external packages.
 // (jsonwebtoken / bcryptjs use CommonJS dynamic require() which breaks when

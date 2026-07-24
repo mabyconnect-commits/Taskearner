@@ -1,7 +1,7 @@
-import { ENV } from "../env";
-import { mockProvider } from "./mock";
-import { nekpayProvider } from "./nekpay";
-import { PaymentProvider } from "./types";
+import { ENV } from "../env.js";
+import { mockProvider } from "./mock.js";
+import { nekpayProvider } from "./nekpay.js";
+import { PaymentProvider } from "./types.js";
 
 export function getProvider(): PaymentProvider {
   switch (ENV.PAYMENT_PROVIDER) {
@@ -12,4 +12,4 @@ export function getProvider(): PaymentProvider {
   }
 }
 
-export * from "./types";
+export * from "./types.js";

@@ -10,7 +10,7 @@ const BUILD = "2026-07-24-lazydb-guard";
 // crash page that reveals nothing.
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   try {
-    const { handleApi } = await import("./_router");
+    const { handleApi } = await import("./_router.js");
 
     const url = new URL(req.url || "/", "http://localhost");
     let path = url.pathname.replace(/^\/api/, "") || "/";
