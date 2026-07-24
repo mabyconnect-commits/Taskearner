@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowUp, Landmark, Plus, Clock, Building2, Check } from "lucide-react";
+import { ArrowUp, Landmark, Plus, Clock, Building2, Check, Loader2 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Sheet } from "@/components/ui/Sheet";
@@ -16,11 +16,21 @@ export default function WalletPage() {
   const { engagement, sales, bank, addBank, withdraw, transactions } = useStore();
   const [tab, setTab] = useState<"engagement" | "sales">("engagement");
   const [bankSheet, setBankSheet] = useState(false);
-  const [wdSheet, setWdSheet] = useState(false);
+  const [amt, setAmt] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const balance = tab === "engagement" ? engagement : sales;
   const payouts = transactions.filter((t) => t.type === "withdraw");
   const totalWithdrawn = payouts.reduce((s, t) => s + Math.abs(t.amount), 0);
+
+  const submitWithdraw = async () => {
+    if (busy) return;
+    setBusy(true);
+    const res = await withdraw(tab, Number(amt) || 0);
+    setBusy(false);
+    toast(res.msg, res.ok ? "success" : "error");
+    if (res.ok) setAmt("");
+  };
 
   return (
     <Layout>
@@ -68,21 +78,41 @@ export default function WalletPage() {
 
       {/* bank / withdraw */}
       {bank ? (
-        <div className="card mt-6 p-5">
-          <div className="flex items-center gap-3">
-            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-brand-100 text-brand-600 dark:bg-brand-500/20 dark:text-brand-300">
+        <>
+          <div className="card mt-6 flex items-center gap-3 p-4">
+            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">
               <Building2 className="h-6 w-6" />
             </div>
-            <div className="flex-1">
-              <p className="font-bold">{maskName(bank.accountName)}</p>
-              <p className="text-sm text-slate-400">{bank.bankName} · {maskAccount(bank.accountNumber)}</p>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-bold">{maskName(bank.accountName)}</p>
+              <p className="truncate text-sm text-slate-400">{bank.bankName} · {maskAccount(bank.accountNumber)}</p>
             </div>
-            <button onClick={() => setBankSheet(true)} className="text-sm font-bold text-brand-600 dark:text-brand-300">Change</button>
+            <button onClick={() => setBankSheet(true)} className="shrink-0 text-sm font-bold text-brand-700 dark:text-brand-300">Change</button>
           </div>
-          <button onClick={() => setWdSheet(true)} className="btn-primary mt-4 w-full py-4 text-lg">
-            <ArrowUp className="h-5 w-5" /> Withdraw {tab} balance
-          </button>
-        </div>
+
+          <div className="card mt-4 p-5">
+            <label className="block text-sm font-semibold text-slate-500">Amount to withdraw</label>
+            <input
+              inputMode="numeric"
+              value={amt}
+              onChange={(e) => setAmt(e.target.value.replace(/\D/g, ""))}
+              className="input mt-2 text-center text-3xl font-extrabold"
+              placeholder="0"
+            />
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button onClick={() => setAmt(String(WITHDRAW_MIN))} className="btn-ghost py-3 text-sm">
+                Min · {formatNaira(WITHDRAW_MIN, false)}
+              </button>
+              <button onClick={() => setAmt(String(Math.floor(balance)))} className="btn-ghost py-3 text-sm">
+                Max · {formatNaira(balance, false)}
+              </button>
+            </div>
+            <button onClick={submitWithdraw} disabled={busy || Number(amt) <= 0} className="btn-primary mt-4 w-full py-4 text-lg">
+              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><ArrowUp className="h-5 w-5" /> Request Withdrawal</>}
+            </button>
+            <p className="mt-2 text-center text-xs text-slate-400">Minimum {formatNaira(WITHDRAW_MIN)} · Payout within 24h</p>
+          </div>
+        </>
       ) : (
         <div className="card mt-6 flex flex-col items-center p-6 text-center">
           <div className="grid h-16 w-16 place-items-center rounded-full bg-amber-100 dark:bg-amber-500/20">
@@ -123,16 +153,6 @@ export default function WalletPage() {
       )}
 
       <BankSheet open={bankSheet} onClose={() => setBankSheet(false)} onSave={async (b) => { const r = await addBank(b); toast(r.msg, r.ok ? "success" : "error"); if (r.ok) setBankSheet(false); }} banks={BANKS} />
-      <WithdrawSheet
-        open={wdSheet}
-        onClose={() => setWdSheet(false)}
-        balance={balance}
-        onConfirm={async (amt) => {
-          const res = await withdraw(tab, amt);
-          toast(res.msg, res.ok ? "success" : "error");
-          if (res.ok) setWdSheet(false);
-        }}
-      />
     </Layout>
   );
 }
@@ -183,32 +203,6 @@ function BankSheet({ open, onClose, onSave, banks }: { open: boolean; onClose: (
           Save bank account
         </button>
       </div>
-    </Sheet>
-  );
-}
-
-function WithdrawSheet({ open, onClose, balance, onConfirm }: { open: boolean; onClose: () => void; balance: number; onConfirm: (amt: number) => void }) {
-  const [amt, setAmt] = useState("");
-  const n = Number(amt) || 0;
-  return (
-    <Sheet open={open} onClose={onClose} title="Withdraw funds">
-      <p className="text-sm text-slate-400">Available: <b className="text-slate-700 dark:text-slate-200">{formatNaira(balance)}</b></p>
-      <input
-        inputMode="numeric"
-        value={amt}
-        onChange={(e) => setAmt(e.target.value.replace(/\D/g, ""))}
-        className="input mt-3 text-center text-2xl font-extrabold"
-        placeholder="0"
-      />
-      <div className="mt-3 flex gap-2">
-        {[balance, WITHDRAW_MIN].filter((v) => v >= WITHDRAW_MIN).map((v) => (
-          <button key={v} onClick={() => setAmt(String(v))} className="btn-ghost flex-1 py-2.5 text-sm">{formatNaira(v, false)}</button>
-        ))}
-      </div>
-      <button onClick={() => onConfirm(n)} disabled={n <= 0} className="btn-primary mt-4 w-full py-4">
-        <ArrowUp className="h-5 w-5" /> Confirm withdrawal
-      </button>
-      <p className="mt-2 text-center text-xs text-slate-400">Minimum {formatNaira(WITHDRAW_MIN)} · Payout within 24h</p>
     </Sheet>
   );
 }
