@@ -567,7 +567,7 @@ async function health(): Promise<ApiResponse> {
   }
   return ok({
     ok: connected,
-    build: "2026-07-24-post-guard",
+    build: "2026-07-24-logs",
     provider: getProvider().name,
     db: {
       configured: !!envVar,
@@ -602,7 +602,7 @@ async function selftest(): Promise<ApiResponse> {
     steps.insertUser = "FAIL: " + String(e?.message || e).slice(0, 250);
   }
   const allOk = Object.values(steps).every((v) => v === "ok");
-  return ok({ selftest: allOk ? "PASS" : "FAIL", build: "2026-07-24-post-guard", steps });
+  return ok({ selftest: allOk ? "PASS" : "FAIL", build: "2026-07-24-logs", steps });
 }
 
 // ── Public marketplace (tasks + sponsored feeds) ─────────────────────────────

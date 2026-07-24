@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 // Build marker so we can confirm exactly which deployment is live via /api/health.
-const BUILD = "2026-07-24-post-guard";
+const BUILD = "2026-07-24-logs";
 
 // Stray async errors (e.g. from the pg driver on a cold connection) must not
 // crash the whole function — log them instead of letting the process die.
@@ -37,9 +37,12 @@ async function readBody(req: VercelRequest): Promise<any> {
 // opaque FUNCTION_INVOCATION_FAILED crash page.
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   res.setHeader("x-taskearner-build", BUILD);
+  const t0 = Date.now();
   try {
     const method = (req.method || "GET").toUpperCase();
+    console.log(`[req] ${method} ${req.url}`);
     const body = method === "GET" || method === "HEAD" ? undefined : await readBody(req);
+    console.log(`[req] ${method} ${req.url} body-read ${Date.now() - t0}ms`);
 
     const { handleApi } = await import("./_router.js");
 
