@@ -64,7 +64,8 @@ export default function Dashboard() {
   const withdrawnLifetime = transactions.filter((t) => t.type === "withdraw").reduce((s, t) => s + Math.abs(t.amount), 0);
 
   // --- referral ---
-  const link = `https://taskearner.africa/signup?ref=${username || "guest"}`;
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const link = `${origin}/signup?ref=${username || "guest"}`;
   const activated = referrals.filter((r) => r.status === "activated").length;
   const pending = referrals.filter((r) => r.status === "pending").length;
   const copyRef = () => {

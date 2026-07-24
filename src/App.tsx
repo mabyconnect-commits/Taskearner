@@ -65,6 +65,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/auth" element={<Auth />} />
+        <Route path="/signup" element={<Auth />} />
         <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
         <Route path="/earn" element={<Protected><Earn /></Protected>} />
         <Route path="/earn/voice" element={<Protected><VoiceEarn /></Protected>} />

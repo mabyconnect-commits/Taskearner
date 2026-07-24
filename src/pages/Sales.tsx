@@ -15,7 +15,8 @@ export default function Sales() {
   const [copied, setCopied] = useState(false);
   const [drawer, setDrawer] = useState(false);
 
-  const link = `https://taskearner.africa/signup?ref=${username || "guest"}`;
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const link = `${origin}/signup?ref=${username || "guest"}`;
   const activated = referrals.filter((r) => r.status === "activated").length;
   const pending = referrals.filter((r) => r.status === "pending").length;
 
