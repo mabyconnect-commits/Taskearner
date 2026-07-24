@@ -11,6 +11,7 @@ export interface ApiRequest {
 export interface ApiResponse {
   status: number;
   body: any;
+  text?: string; // when set, respond as text/plain (e.g. NEKpay callback "success")
   headers?: Record<string, string>;
 }
 
@@ -20,6 +21,10 @@ export function ok(body: any, status = 200): ApiResponse {
 
 export function err(message: string, status = 400): ApiResponse {
   return { status, body: { error: message } };
+}
+
+export function textResp(text: string, status = 200): ApiResponse {
+  return { status, body: null, text };
 }
 
 export class HttpError extends Error {

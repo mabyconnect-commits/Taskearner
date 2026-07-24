@@ -1,19 +1,25 @@
-import { InitPaymentInput, InitPaymentResult, PaymentProvider, PayoutInput, PayoutResult, VerifyResult } from "./types";
+import { CallbackResult, CreateOrderInput, CreateOrderResult, PaymentProvider, PayoutInput, PayoutResult, QueryOrderResult } from "./types";
 
-// Mock provider: settles instantly with no external calls. Lets the whole
-// funding/payout flow run end-to-end before real NekPay keys are wired in.
+// Mock provider: settles instantly, no external calls. Lets the whole
+// deposit/withdrawal flow run before real NEKpay keys are configured.
 export const mockProvider: PaymentProvider = {
   name: "mock",
-  async initPayment(input: InitPaymentInput): Promise<InitPaymentResult> {
-    return { authorizationUrl: "", reference: input.reference, instant: true };
+  async createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
+    return { ok: true, payUrl: "", providerRef: `mock_${input.mchOrderNo}`, instant: true };
   },
-  async verifyPayment(): Promise<VerifyResult> {
-    return { status: "success", amount: 0 };
+  async queryOrder(): Promise<QueryOrderResult> {
+    return { paid: true, amount: 0, raw: "mock" };
   },
-  async initPayout(input: PayoutInput): Promise<PayoutResult> {
-    return { status: "success", reference: input.reference };
+  verifyCallback(params: Record<string, string>): CallbackResult {
+    return { valid: true, mchOrderNo: params.mch_order_no || "", paid: true, amount: Number(params.trade_amount || 0) };
   },
-  verifyWebhook(): boolean {
-    return true;
+  async payout(input: PayoutInput): Promise<PayoutResult> {
+    return { status: "paid", providerRef: `mock_${input.transferId}`, raw: "mock" };
+  },
+  async queryPayout(transferId: string): Promise<PayoutResult> {
+    return { status: "paid", providerRef: `mock_${transferId}`, raw: "mock" };
+  },
+  async balance(): Promise<{ ok: boolean; balance: number }> {
+    return { ok: true, balance: 1_000_000 };
   },
 };

@@ -10,8 +10,20 @@ export const ENV = {
 
   // Payments
   PAYMENT_PROVIDER: (process.env.PAYMENT_PROVIDER || "mock").toLowerCase(), // "mock" | "nekpay"
-  NEKPAY_SECRET_KEY: process.env.NEKPAY_SECRET_KEY || "",
-  NEKPAY_PUBLIC_KEY: process.env.NEKPAY_PUBLIC_KEY || "",
-  NEKPAY_BASE_URL: process.env.NEKPAY_BASE_URL || "https://api.nekpay.com",
+
+  // NEKpay — deposits (pay-in), app talks to NEKpay directly
+  NEKPAY_MCH_ID: process.env.NEKPAY_MCH_ID || "",
+  NEKPAY_KEY: process.env.NEKPAY_KEY || "", // pay-in secret key (代收密钥)
+  NEKPAY_PAY_TYPE: process.env.NEKPAY_PAY_TYPE || "",
+  NEKPAY_API_URL: process.env.NEKPAY_API_URL || "https://api.nekpayment.com",
+  NEKPAY_CALLBACK_IPS: process.env.NEKPAY_CALLBACK_IPS || "", // empty = signature-only
+  NEKPAY_QUERY_PATH: process.env.NEKPAY_QUERY_PATH || "/query/order",
+
+  // NEKpay — withdrawals (pay-out) via the fixed-IP relay
+  NEKPAY_RELAY_URL: process.env.NEKPAY_RELAY_URL || "", // e.g. http://5.223.51.249:PORT
+  NEKPAY_RELAY_SECRET: process.env.NEKPAY_RELAY_SECRET || "",
+  NAIRA_AUTO_MAX_NGN: Number(process.env.NAIRA_AUTO_MAX_NGN || 65000),
+  PAYOUT_AUTOSETTLE: process.env.NEKPAY_PAYOUT_AUTOSETTLE === "1",
+
   APP_URL: process.env.APP_URL || "http://localhost:5173",
 };

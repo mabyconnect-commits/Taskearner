@@ -17,5 +17,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   });
 
   if (result.headers) for (const [k, v] of Object.entries(result.headers)) res.setHeader(k, v);
+  if (typeof result.text === "string") {
+    res.status(result.status).setHeader("Content-Type", "text/plain");
+    res.send(result.text);
+    return;
+  }
   res.status(result.status).json(result.body);
 }

@@ -1,10 +1,19 @@
+import crypto from "node:crypto";
 import { ensureSchema, sql, num } from "./_lib/db";
-import { ApiRequest, ApiResponse, HttpError, ok, err } from "./_lib/http";
+import { ApiRequest, ApiResponse, HttpError, ok, err, textResp } from "./_lib/http";
 import { comparePassword, hashPassword, requireAuth, signToken } from "./_lib/auth";
 import { PLANS, planOf, WITHDRAW_MIN, COOLDOWN_MS } from "./_lib/plans";
-import { loadState, reference, serializeUser } from "./_lib/state";
+import { loadState, serializeUser } from "./_lib/state";
 import { getProvider } from "./_lib/payments";
+import { resolveBank, isInstantPayable } from "./_lib/payments/banks";
 import { ENV } from "./_lib/env";
+
+function genOrderNo(): string {
+  return ("TE" + Date.now().toString() + crypto.randomBytes(3).toString("hex")).toUpperCase();
+}
+function genTransferId(uid: string): string {
+  return `gp_${uid.slice(0, 8)}_${Date.now().toString(36)}`;
+}
 
 function slugUsername(name: string): string {
   const base = (name.trim().split(" ")[0] || "earner").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -215,34 +224,58 @@ async function activatePlan(req: ApiRequest): Promise<ApiResponse> {
   return ok({ user: await loadState(uid), transactions: await txList(uid) });
 }
 
+// ── Deposits (pay-in) ────────────────────────────────────────────────────────
 async function fundInitiate(req: ApiRequest): Promise<ApiResponse> {
   const uid = requireAuth(req);
   const amount = Math.floor(Number(req.body?.amount) || 0);
   if (amount < 100) return err("Minimum funding is ₦100");
-  const [u] = await sql`SELECT email FROM users WHERE id = ${uid}`;
   const provider = getProvider();
-  const ref = reference("fund");
-  const init = await provider.initPayment({
-    reference: ref,
+
+  // Reuse a recent PENDING order for the same amount (refresh-safe)
+  const [reuse] = await sql`
+    SELECT reference, meta FROM payments
+    WHERE user_id = ${uid} AND purpose = 'fund' AND status = 'pending' AND amount = ${amount}
+      AND created_at > now() - interval '25 minutes'
+    ORDER BY created_at DESC LIMIT 1`;
+  if (reuse && reuse.meta?.payUrl) {
+    return ok({ reference: reuse.reference, authorizationUrl: reuse.meta.payUrl, instant: false });
+  }
+
+  const [u] = await sql`SELECT email FROM users WHERE id = ${uid}`;
+  const mchOrderNo = genOrderNo();
+  const created = await provider.createOrder({
+    mchOrderNo,
     amount,
     email: u.email,
-    callbackUrl: `${ENV.APP_URL}/deposit?ref=${ref}`,
+    notifyUrl: `${ENV.APP_URL}/api/deposits/nekpay/callback`,
+    pageUrl: `${ENV.APP_URL}/deposit?ref=${mchOrderNo}`,
   });
+  if (!created.ok && !created.instant) {
+    console.error("[nekpay] create order failed:", created.message);
+    return err("Could not start payment. Please try again.");
+  }
   await sql`
-    INSERT INTO payments (user_id, reference, provider, purpose, amount, status)
-    VALUES (${uid}, ${ref}, ${provider.name}, 'fund', ${amount}, 'pending')`;
-  return ok({ reference: ref, authorizationUrl: init.authorizationUrl, instant: init.instant });
+    INSERT INTO payments (user_id, reference, provider, purpose, amount, status, meta)
+    VALUES (${uid}, ${mchOrderNo}, ${provider.name}, 'fund', ${amount}, 'pending',
+            ${sql.json({ orderNo: created.providerRef, payUrl: created.payUrl })})`;
+
+  if (created.instant) {
+    await creditDeposit(mchOrderNo);
+    return ok({ reference: mchOrderNo, authorizationUrl: "", instant: true });
+  }
+  return ok({ reference: mchOrderNo, authorizationUrl: created.payUrl, instant: false });
 }
 
-async function creditFunding(uid: string, ref: string): Promise<void> {
+// Idempotent credit: only the winner of the atomic PENDING claim credits once.
+async function creditDeposit(mchOrderNo: string): Promise<void> {
   await sql.begin(async (tx) => {
-    const [p] = await tx`SELECT * FROM payments WHERE reference = ${ref} AND user_id = ${uid} FOR UPDATE`;
+    const [p] = await tx`SELECT * FROM payments WHERE reference = ${mchOrderNo} FOR UPDATE`;
     if (!p || p.status === "paid") return;
     await tx`UPDATE payments SET status = 'paid' WHERE id = ${p.id}`;
-    await tx`UPDATE users SET deposit = deposit + ${num(p.amount)} WHERE id = ${uid}`;
+    await tx`UPDATE users SET deposit = deposit + ${num(p.amount)} WHERE id = ${p.user_id}`;
     await tx`
       INSERT INTO transactions (user_id, type, title, amount, wallet)
-      VALUES (${uid}, 'fund', 'Wallet funding (NekPay)', ${num(p.amount)}, 'deposit')`;
+      VALUES (${p.user_id}, 'fund', 'Wallet funding (NEKpay)', ${num(p.amount)}, 'deposit')`;
   });
 }
 
@@ -252,30 +285,42 @@ async function fundVerify(req: ApiRequest): Promise<ApiResponse> {
   if (!ref) return err("Missing reference");
   const [p] = await sql`SELECT * FROM payments WHERE reference = ${ref} AND user_id = ${uid}`;
   if (!p) return err("Payment not found", 404);
-
-  const provider = getProvider();
-  const result = await provider.verifyPayment(ref);
-  if (result.status === "success") {
-    await creditFunding(uid, ref);
+  if (p.status === "paid") {
     return ok({ status: "success", user: await loadState(uid), transactions: await txList(uid) });
   }
-  return ok({ status: result.status, user: await loadState(uid) });
-}
-
-async function webhook(req: ApiRequest): Promise<ApiResponse> {
   const provider = getProvider();
-  const raw = typeof req.body === "string" ? req.body : JSON.stringify(req.body ?? {});
-  const sig = (req.headers["x-nekpay-signature"] || req.headers["x-webhook-signature"]) as string | undefined;
-  if (!provider.verifyWebhook(raw, sig)) return err("Invalid signature", 401);
-  const event = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-  const ref = event?.data?.reference;
-  if (ref && event?.event?.includes("success")) {
-    const [p] = await sql`SELECT user_id FROM payments WHERE reference = ${ref}`;
-    if (p) await creditFunding(p.user_id, ref);
+  const q = await provider.queryOrder(ref);
+  if (q.paid) {
+    await creditDeposit(ref);
+    return ok({ status: "success", user: await loadState(uid), transactions: await txList(uid) });
   }
-  return ok({ received: true });
+  return ok({ status: "pending", user: await loadState(uid) });
 }
 
+// Signed callback from NEKpay (form-urlencoded). Must reply literal "success".
+async function nekpayCallback(req: ApiRequest): Promise<ApiResponse> {
+  const provider = getProvider();
+  const params: Record<string, string> = req.body && typeof req.body === "object" ? req.body : {};
+
+  if (ENV.NEKPAY_CALLBACK_IPS) {
+    const xff = String(req.headers["x-forwarded-for"] || "");
+    const allowed = ENV.NEKPAY_CALLBACK_IPS.split(",").map((s) => s.trim()).filter(Boolean);
+    if (!allowed.some((ip) => xff.includes(ip))) return textResp("retry", 200);
+  }
+
+  const r = provider.verifyCallback(params);
+  if (!r.valid) return err("bad sign", 400);
+  try {
+    if (r.paid && r.mchOrderNo) await creditDeposit(r.mchOrderNo);
+    else if (r.mchOrderNo) await sql`UPDATE payments SET status = 'failed' WHERE reference = ${r.mchOrderNo} AND status = 'pending'`;
+    return textResp("success", 200);
+  } catch (e) {
+    console.error("[nekpay] callback credit error:", e);
+    return textResp("retry", 500); // NEKpay retries
+  }
+}
+
+// ── Withdrawals (pay-out via relay) ──────────────────────────────────────────
 async function withdraw(req: ApiRequest): Promise<ApiResponse> {
   const uid = requireAuth(req);
   const walletKind = req.body?.wallet === "sales" ? "sales" : "engagement";
@@ -289,27 +334,108 @@ async function withdraw(req: ApiRequest): Promise<ApiResponse> {
   if (amount > balance) return err("Insufficient balance in this wallet");
 
   const provider = getProvider();
-  const ref = reference("payout");
-  const payout = await provider.initPayout({
-    reference: ref,
-    amount,
-    bankName: bank.bank_name,
-    accountNumber: bank.account_number,
-    accountName: bank.account_name,
-  });
+  const transferId = genTransferId(uid);
+  const bankEntry = resolveBank(bank.bank_name);
 
-  await sql.begin(async (tx) => {
+  // Reserve funds up front (debit + PENDING payout + pending ledger row), atomic
+  const reserved = await sql.begin(async (tx) => {
     if (walletKind === "sales") await tx`UPDATE users SET sales = sales - ${amount} WHERE id = ${uid}`;
     else await tx`UPDATE users SET engagement = engagement - ${amount} WHERE id = ${uid}`;
-    await tx`
+    const [txn] = await tx`
       INSERT INTO transactions (user_id, type, title, amount, wallet, status)
-      VALUES (${uid}, 'withdraw', ${"Withdrawal to " + bank.bank_name}, ${-amount}, ${walletKind}, ${payout.status})`;
-    await tx`
-      INSERT INTO payouts (user_id, reference, amount, wallet, bank_name, account_number, account_name, status)
-      VALUES (${uid}, ${ref}, ${amount}, ${walletKind}, ${bank.bank_name}, ${bank.account_number}, ${bank.account_name}, ${payout.status})`;
+      VALUES (${uid}, 'withdraw', ${"Withdrawal to " + bank.bank_name}, ${-amount}, ${walletKind}, 'pending')
+      RETURNING id`;
+    const [payout] = await tx`
+      INSERT INTO payouts (user_id, reference, amount, wallet, bank_name, account_number, account_name, status, tx_id)
+      VALUES (${uid}, ${transferId}, ${amount}, ${walletKind}, ${bank.bank_name}, ${bank.account_number}, ${bank.account_name}, 'PENDING', ${txn.id})
+      RETURNING id`;
+    return { payoutId: payout.id as string, txId: txn.id as string };
   });
 
-  return ok({ status: payout.status, user: await loadState(uid), transactions: await txList(uid) });
+  const relayReady = provider.name === "mock" || (!!ENV.NEKPAY_RELAY_URL && !!ENV.NEKPAY_RELAY_SECRET);
+  const autoPayable = isInstantPayable(bank.bank_name) && amount <= ENV.NAIRA_AUTO_MAX_NGN && relayReady;
+
+  if (!autoPayable) {
+    // Manual queue (unsupported bank, over ceiling, or relay not configured). Funds reserved.
+    return ok({ status: "pending", user: await loadState(uid), transactions: await txList(uid) });
+  }
+
+  // Atomic claim PENDING -> SENT (blocks double dispatch)
+  const claim = await sql`UPDATE payouts SET status = 'SENT' WHERE id = ${reserved.payoutId} AND status = 'PENDING' RETURNING id`;
+  if (claim.length === 0) return ok({ status: "pending", user: await loadState(uid), transactions: await txList(uid) });
+
+  const res = await provider.payout({
+    transferId,
+    amount,
+    bankName: bank.bank_name,
+    bankCode: bankEntry?.code || "",
+    accountNumber: bank.account_number,
+    accountName: bank.account_name,
+    backUrl: `${ENV.APP_URL}/api/withdrawals/naira/callback`,
+  });
+
+  if (res.status === "failed") {
+    // Explicit rejection → refund; nothing left the account.
+    await sql.begin(async (tx) => {
+      if (walletKind === "sales") await tx`UPDATE users SET sales = sales + ${amount} WHERE id = ${uid}`;
+      else await tx`UPDATE users SET engagement = engagement + ${amount} WHERE id = ${uid}`;
+      await tx`UPDATE payouts SET status = 'REJECTED', provider_status = ${res.raw} WHERE id = ${reserved.payoutId}`;
+      await tx`DELETE FROM transactions WHERE id = ${reserved.txId}`;
+    });
+    return err(res.message ? "Withdrawal declined. No funds were deducted." : "Withdrawal declined. No funds were deducted.");
+  }
+
+  const paid = res.status === "paid";
+  await sql.begin(async (tx) => {
+    await tx`UPDATE payouts SET status = ${paid ? "PAID" : "SENT"}, provider_ref = ${res.providerRef || ""}, provider_status = ${res.raw} WHERE id = ${reserved.payoutId}`;
+    await tx`UPDATE transactions SET status = ${paid ? "completed" : "pending"} WHERE id = ${reserved.txId}`;
+  });
+  return ok({ status: paid ? "success" : "processing", user: await loadState(uid), transactions: await txList(uid) });
+}
+
+// Settle a SENT payout by trusting only the authenticated relay query (§5c).
+async function settlePayout(transferId: string): Promise<void> {
+  const [p] = await sql`SELECT * FROM payouts WHERE reference = ${transferId}`;
+  if (!p || p.status === "PAID" || p.status === "REJECTED") return;
+  const res = await getProvider().queryPayout(transferId);
+  if (res.status === "paid") {
+    await sql`UPDATE payouts SET status = 'PAID', provider_ref = ${res.providerRef || ""}, provider_status = ${res.raw} WHERE id = ${p.id}`;
+    if (p.tx_id) await sql`UPDATE transactions SET status = 'completed' WHERE id = ${p.tx_id}`;
+  } else if (res.status === "failed") {
+    await sql.begin(async (tx) => {
+      if (p.wallet === "sales") await tx`UPDATE users SET sales = sales + ${num(p.amount)} WHERE id = ${p.user_id}`;
+      else await tx`UPDATE users SET engagement = engagement + ${num(p.amount)} WHERE id = ${p.user_id}`;
+      await tx`UPDATE payouts SET status = 'REJECTED', provider_status = ${res.raw} WHERE id = ${p.id}`;
+      if (p.tx_id) await tx`DELETE FROM transactions WHERE id = ${p.tx_id}`;
+    });
+  }
+  // processing → leave SENT, re-query later
+}
+
+// back_url from the relay: don't trust the body — just re-query the payout.
+async function withdrawalCallback(req: ApiRequest): Promise<ApiResponse> {
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const ref = String(body.mch_transferId || body.transferId || req.query.transferId || "");
+  if (ref) {
+    try {
+      await settlePayout(ref);
+    } catch (e) {
+      console.error("[nekpay] payout settle error:", e);
+    }
+  }
+  return textResp("success", 200);
+}
+
+// Authenticated: re-check any SENT payouts for this user (settle on open).
+async function payoutsReconcile(req: ApiRequest): Promise<ApiResponse> {
+  const uid = requireAuth(req);
+  const sent = await sql`SELECT reference FROM payouts WHERE user_id = ${uid} AND status = 'SENT'`;
+  for (const row of sent) {
+    try {
+      await settlePayout(row.reference);
+    } catch { /* keep going */ }
+  }
+  return ok({ user: await loadState(uid), transactions: await txList(uid) });
 }
 
 async function payBill(req: ApiRequest): Promise<ApiResponse> {
@@ -399,8 +525,10 @@ const routes: Record<string, Handler> = {
   "POST /plans/activate": activatePlan,
   "POST /fund/initiate": fundInitiate,
   "POST /fund/verify": fundVerify,
-  "POST /payments/webhook": webhook,
+  "POST /deposits/nekpay/callback": nekpayCallback,
   "POST /withdraw": withdraw,
+  "POST /withdrawals/naira/callback": withdrawalCallback,
+  "POST /payouts/reconcile": payoutsReconcile,
   "POST /bills/pay": payBill,
   "GET /transactions": getTransactions,
   "GET /referrals": getReferrals,

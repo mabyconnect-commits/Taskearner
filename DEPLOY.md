@@ -34,22 +34,43 @@ Project → **Settings → Environment Variables**:
 
 `POSTGRES_URL` is set for you by step 2.
 
-## 4. Go live with NekPay (when ready)
+## 4. Go live with NEKpay (when ready)
 
-Add these and set `PAYMENT_PROVIDER=nekpay`:
+The adapter (`api/_lib/payments/nekpay.ts`) implements NEKpay per the integration
+brief: MD5-signed form-urlencoded **pay-in** (`/pay/web` → signed callback →
+idempotent credit → reply `success`), and **pay-out** through the fixed-IP
+**relay** (the app never holds the withdrawal key). Set `PAYMENT_PROVIDER=nekpay`
+and add:
 
+**Deposits (pay-in):**
 | Key | Value |
 |-----|-------|
-| `NEKPAY_SECRET_KEY` | `sk_live_…` |
-| `NEKPAY_PUBLIC_KEY` | `pk_live_…` |
-| `NEKPAY_BASE_URL` | only if different from `https://api.nekpay.com` |
+| `NEKPAY_MCH_ID` | merchant id (2nd account) |
+| `NEKPAY_KEY` | pay-in secret key (代收密钥) |
+| `NEKPAY_PAY_TYPE` | channel/通道编码 |
+| `NEKPAY_API_URL` | `https://api.nekpayment.com` |
 
-> ⚠️ **Confirm the NekPay integration.** The adapter in
-> `api/_lib/payments/nekpay.ts` uses common Paystack-style endpoints
-> (`/transaction/initialize`, `/transaction/verify/:ref`, `/transfer`) and an
-> HMAC-SHA512 webhook signature. Check these against NekPay's official API docs
-> and adjust the paths/fields/signature if they differ. Point NekPay's webhook
-> to `https://<your-app>/api/payments/webhook`.
+**Withdrawals (pay-out, via relay):**
+| Key | Value |
+|-----|-------|
+| `NEKPAY_RELAY_URL` | `http://5.223.51.249:<relay-2 PORT>` |
+| `NEKPAY_RELAY_SECRET` | relay-2 `RELAY_SECRET` (from the box: `pm2 env <id>`) |
+| `NAIRA_AUTO_MAX_NGN` | `65000` (auto-send ceiling) |
+
+**Callbacks** — configured automatically from `APP_URL`. NEKpay posts to
+`…/api/deposits/nekpay/callback`; the relay posts to
+`…/api/withdrawals/naira/callback`. Make sure `APP_URL` is your real domain.
+
+> ⚠️ **Two things to confirm before real money:**
+> 1. The **bank_code map** in `api/_lib/payments/banks.ts` — replace the
+>    placeholder codes with NEKpay's official `bank_code` list (port the
+>    reference `nekpayBanks.ts`). Moniepoint/FairMoney/Carbon are routed to the
+>    manual queue by design.
+> 2. The **relay** for the 2nd account must be running and its box IP
+>    whitelisted on NEKpay (per the brief it already is).
+>
+> Test order: `/api/health` green → one small deposit reflects → one small
+> withdrawal to a supported bank settles.
 
 Then redeploy.
 

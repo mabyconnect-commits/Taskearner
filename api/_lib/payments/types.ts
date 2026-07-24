@@ -1,40 +1,60 @@
-export interface InitPaymentInput {
-  reference: string;
-  amount: number; // in Naira
+// Payment provider abstraction shaped around NEKpay (pay-in direct + pay-out
+// via relay), with a mock implementation for local/dev.
+
+export interface CreateOrderInput {
+  mchOrderNo: string;
+  amount: number; // NGN
   email: string;
-  callbackUrl: string;
+  notifyUrl: string;
+  pageUrl?: string;
 }
 
-export interface InitPaymentResult {
-  // URL to redirect the user to for checkout (empty for mock/instant providers)
-  authorizationUrl: string;
-  reference: string;
-  // true when the provider settles instantly (mock) and no redirect is needed
-  instant: boolean;
+export interface CreateOrderResult {
+  ok: boolean;
+  payUrl: string; // URL to send the user to (empty for instant/mock)
+  providerRef: string; // NEKpay orderNo (stringified)
+  instant: boolean; // true for mock — settles without redirect
+  message?: string; // internal log only; never surface raw provider codes
 }
 
-export interface VerifyResult {
-  status: "success" | "pending" | "failed";
+export interface QueryOrderResult {
+  paid: boolean;
+  amount: number;
+  raw: string;
+}
+
+export interface CallbackResult {
+  valid: boolean; // signature verified
+  mchOrderNo: string;
+  paid: boolean;
   amount: number;
 }
 
 export interface PayoutInput {
-  reference: string;
-  amount: number;
+  transferId: string; // fresh idempotency id per attempt
+  amount: number; // NGN
   bankName: string;
+  bankCode: string;
   accountNumber: string;
   accountName: string;
+  backUrl: string;
 }
 
+export type PayoutStatus = "sent" | "paid" | "failed" | "processing";
+
 export interface PayoutResult {
-  status: "processing" | "success" | "failed";
-  reference: string;
+  status: PayoutStatus;
+  providerRef?: string; // NEKpay tradeNo
+  raw: string;
+  message?: string;
 }
 
 export interface PaymentProvider {
   name: string;
-  initPayment(input: InitPaymentInput): Promise<InitPaymentResult>;
-  verifyPayment(reference: string): Promise<VerifyResult>;
-  initPayout(input: PayoutInput): Promise<PayoutResult>;
-  verifyWebhook(rawBody: string, signature: string | undefined): boolean;
+  createOrder(input: CreateOrderInput): Promise<CreateOrderResult>;
+  queryOrder(mchOrderNo: string): Promise<QueryOrderResult>;
+  verifyCallback(params: Record<string, string>): CallbackResult;
+  payout(input: PayoutInput): Promise<PayoutResult>;
+  queryPayout(transferId: string): Promise<PayoutResult>;
+  balance(): Promise<{ ok: boolean; balance: number }>;
 }

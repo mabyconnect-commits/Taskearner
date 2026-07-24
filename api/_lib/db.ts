@@ -94,18 +94,25 @@ export async function ensureSchema(): Promise<void> {
     `;
     await sql`
       CREATE TABLE IF NOT EXISTS payouts (
-        id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id        uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        reference      text UNIQUE NOT NULL,
-        amount         numeric(14,2) NOT NULL,
-        wallet         text NOT NULL,
-        bank_name      text NOT NULL,
-        account_number text NOT NULL,
-        account_name   text NOT NULL,
-        status         text NOT NULL DEFAULT 'processing',
-        created_at     timestamptz NOT NULL DEFAULT now()
+        id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id         uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        reference       text UNIQUE NOT NULL,
+        amount          numeric(14,2) NOT NULL,
+        wallet          text NOT NULL,
+        bank_name       text NOT NULL,
+        account_number  text NOT NULL,
+        account_name    text NOT NULL,
+        status          text NOT NULL DEFAULT 'PENDING',
+        provider_ref    text NOT NULL DEFAULT '',
+        provider_status text NOT NULL DEFAULT '',
+        tx_id           uuid,
+        created_at      timestamptz NOT NULL DEFAULT now()
       );
     `;
+    // Columns added after initial release (no-op on fresh DBs)
+    await sql`ALTER TABLE payouts ADD COLUMN IF NOT EXISTS provider_ref text NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE payouts ADD COLUMN IF NOT EXISTS provider_status text NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE payouts ADD COLUMN IF NOT EXISTS tx_id uuid`;
   })();
   // Cache the in-flight promise so concurrent requests share it, but if it
   // rejects (e.g. DB briefly unreachable on a cold start), clear the cache so
