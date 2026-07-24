@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, ArrowLeftRight, Banknote, ListChecks, Megaphone,
-  Loader2, Plus, Check, X, Power, Trash2, RefreshCw,
+  Loader2, Plus, Check, X, Power, Trash2, RefreshCw, Wallet, Copy,
 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -12,13 +12,14 @@ import { formatNaira } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 
-type Tab = "overview" | "users" | "transactions" | "payouts" | "tasks" | "sponsored";
+type Tab = "overview" | "users" | "deposits" | "payouts" | "transactions" | "tasks" | "sponsored";
 
 const TABS: { id: Tab; label: string; icon: typeof Users }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "users", label: "Users", icon: Users },
-  { id: "transactions", label: "Activity", icon: ArrowLeftRight },
+  { id: "deposits", label: "Deposits", icon: Wallet },
   { id: "payouts", label: "Payouts", icon: Banknote },
+  { id: "transactions", label: "Activity", icon: ArrowLeftRight },
   { id: "tasks", label: "Tasks", icon: ListChecks },
   { id: "sponsored", label: "Posts", icon: Megaphone },
 ];
@@ -55,8 +56,9 @@ export default function Admin() {
 
       {tab === "overview" && <Overview />}
       {tab === "users" && <UsersTab />}
-      {tab === "transactions" && <TransactionsTab />}
+      {tab === "deposits" && <DepositsTab />}
       {tab === "payouts" && <PayoutsTab />}
+      {tab === "transactions" && <TransactionsTab />}
       {tab === "tasks" && <TasksTab />}
       {tab === "sponsored" && <SponsoredTab />}
     </Layout>
@@ -168,16 +170,86 @@ function TransactionsTab() {
   );
 }
 
+function IdRow({ label, value }: { label: string; value: string }) {
+  const toast = useToast();
+  if (!value) return null;
+  return (
+    <button
+      onClick={() => { navigator.clipboard?.writeText(value).catch(() => {}); toast("Copied", "info"); }}
+      className="mt-1 flex w-full items-center gap-1.5 text-left text-[11px] text-slate-400"
+    >
+      <span className="font-semibold">{label}:</span>
+      <span className="truncate font-mono">{value}</span>
+      <Copy className="h-3 w-3 shrink-0" />
+    </button>
+  );
+}
+
+function DepositsTab() {
+  const toast = useToast();
+  const { data, loading, reload } = useAsync(() => api.adminDeposits());
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const act = async (id: string, action: "credit" | "fail") => {
+    setBusy(id);
+    try {
+      await api.adminDepositAction({ id, action });
+      toast(action === "credit" ? "Wallet credited" : "Marked as failed", "success");
+      reload();
+    } catch (e: any) {
+      toast(e?.message || "Failed", "error");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const tone = (s: string) =>
+    s === "paid" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
+    : s === "failed" ? "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
+    : "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300";
+
+  if (loading) return <Spinner />;
+  return (
+    <div className="space-y-2">
+      {(data?.deposits ?? []).map((d: any) => (
+        <div key={d.id} className="card p-4">
+          <div className="flex items-center justify-between">
+            <p className="font-bold">{formatNaira(d.amount)}</p>
+            <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold uppercase", tone(d.status))}>{d.status}</span>
+          </div>
+          <p className="text-sm text-slate-400">{d.user} · {d.email}</p>
+          <p className="text-xs text-slate-500">{new Date(d.ts).toLocaleString()}</p>
+          <IdRow label="NEKpay ID" value={d.nekpayId} />
+          <IdRow label="Ref" value={d.reference} />
+          {d.status !== "paid" && (
+            <div className="mt-3 flex gap-2">
+              <button onClick={() => act(d.id, "credit")} disabled={busy === d.id} className="btn-primary flex-1 py-2.5 text-sm">
+                {busy === d.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Force credit
+              </button>
+              {d.status !== "failed" && (
+                <button onClick={() => act(d.id, "fail")} disabled={busy === d.id} className="btn-ghost flex-1 py-2.5 text-sm text-rose-500">
+                  <X className="h-4 w-4" /> Mark failed
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+      {(data?.deposits ?? []).length === 0 && <p className="py-6 text-center text-slate-400">No deposits yet.</p>}
+    </div>
+  );
+}
+
 function PayoutsTab() {
   const toast = useToast();
   const { data, loading, reload } = useAsync(() => api.adminPayouts());
   const [busy, setBusy] = useState<string | null>(null);
 
-  const act = async (id: string, action: "approve" | "reject") => {
+  const act = async (id: string, action: "approve" | "reject" | "retry") => {
     setBusy(id);
     try {
       await api.adminPayoutAction({ id, action });
-      toast(action === "approve" ? "Marked as paid" : "Rejected & refunded", "success");
+      toast(action === "approve" ? "Marked as paid" : action === "reject" ? "Rejected & refunded" : "Retry sent", "success");
       reload();
     } catch (e: any) {
       toast(e?.message || "Failed", "error");
@@ -189,29 +261,36 @@ function PayoutsTab() {
   if (loading) return <Spinner />;
   return (
     <div className="space-y-2">
-      {(data?.payouts ?? []).map((p: any) => (
-        <div key={p.id} className="card p-4">
-          <div className="flex items-center justify-between">
-            <p className="font-bold">{formatNaira(p.amount)}</p>
-            <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold",
-              p.status === "PAID" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
-              : p.status === "REJECTED" ? "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
-              : "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300")}>{p.status}</span>
-          </div>
-          <p className="text-sm text-slate-400">{p.user} · {p.wallet} wallet</p>
-          <p className="text-xs text-slate-500">{p.bankName} · {p.accountNumber} · {p.accountName}</p>
-          {p.status === "PENDING" && (
-            <div className="mt-3 flex gap-2">
-              <button onClick={() => act(p.id, "approve")} disabled={busy === p.id} className="btn-primary flex-1 py-2.5 text-sm">
-                {busy === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Mark paid
-              </button>
-              <button onClick={() => act(p.id, "reject")} disabled={busy === p.id} className="btn-ghost flex-1 py-2.5 text-sm">
-                <X className="h-4 w-4" /> Reject
-              </button>
+      {(data?.payouts ?? []).map((p: any) => {
+        const open = p.status !== "PAID" && p.status !== "REJECTED";
+        return (
+          <div key={p.id} className="card p-4">
+            <div className="flex items-center justify-between">
+              <p className="font-bold">{formatNaira(p.amount)}</p>
+              <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold",
+                p.status === "PAID" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
+                : p.status === "REJECTED" ? "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
+                : "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300")}>{p.status}</span>
             </div>
-          )}
-        </div>
-      ))}
+            <p className="text-sm text-slate-400">{p.user} · {p.wallet} wallet</p>
+            <p className="text-xs text-slate-500">{p.bankName} · {p.accountNumber} · {p.accountName}</p>
+            <IdRow label="NEKpay ID" value={p.nekpayId} />
+            {open && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button onClick={() => act(p.id, "approve")} disabled={busy === p.id} className="btn-primary flex-1 py-2.5 text-sm">
+                  {busy === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Paid
+                </button>
+                <button onClick={() => act(p.id, "retry")} disabled={busy === p.id} className="btn-ghost flex-1 py-2.5 text-sm">
+                  <RefreshCw className="h-4 w-4" /> Retry
+                </button>
+                <button onClick={() => act(p.id, "reject")} disabled={busy === p.id} className="btn-ghost flex-1 py-2.5 text-sm text-rose-500">
+                  <X className="h-4 w-4" /> Reject
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
       {(data?.payouts ?? []).length === 0 && <p className="py-6 text-center text-slate-400">No payouts yet.</p>}
     </div>
   );

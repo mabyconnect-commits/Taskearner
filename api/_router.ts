@@ -345,6 +345,25 @@ async function fundVerify(req: ApiRequest): Promise<ApiResponse> {
   return ok({ status: "pending", user: await loadState(uid) });
 }
 
+// Safety net: re-query any recent pending deposits against NEKpay and credit
+// the ones that actually paid. Runs when the user opens the app, so a deposit
+// self-heals even if the gateway callback never reached us.
+async function depositsReconcile(req: ApiRequest): Promise<ApiResponse> {
+  const uid = requireAuth(req);
+  const provider = getProvider();
+  const pending = await sql`
+    SELECT reference FROM payments
+    WHERE user_id = ${uid} AND purpose = 'fund' AND status = 'pending'
+      AND created_at > now() - interval '3 days'`;
+  for (const row of pending) {
+    try {
+      const q = await provider.queryOrder(row.reference);
+      if (q.paid) await creditDeposit(row.reference);
+    } catch { /* keep going */ }
+  }
+  return ok({ user: await loadState(uid), transactions: await txList(uid) });
+}
+
 // Signed callback from NEKpay (form-urlencoded). Must reply literal "success".
 async function nekpayCallback(req: ApiRequest): Promise<ApiResponse> {
   const provider = getProvider();
@@ -743,15 +762,56 @@ async function adminTransactions(req: ApiRequest): Promise<ApiResponse> {
   });
 }
 
+// All wallet-funding attempts, with the NEKpay order id for reconciliation.
+async function adminDeposits(req: ApiRequest): Promise<ApiResponse> {
+  await requireAdmin(req);
+  const rows = await sql`
+    SELECT p.id, p.reference, p.amount, p.status, p.meta, p.created_at, u.name, u.email
+    FROM payments p JOIN users u ON u.id = p.user_id
+    WHERE p.purpose = 'fund'
+    ORDER BY p.created_at DESC LIMIT 100`;
+  return ok({
+    deposits: rows.map((p: any) => ({
+      id: p.id,
+      reference: p.reference,
+      nekpayId: (p.meta && p.meta.orderNo) ? String(p.meta.orderNo) : "",
+      amount: num(p.amount),
+      status: p.status,
+      user: p.name, email: p.email,
+      ts: new Date(p.created_at).getTime(),
+    })),
+  });
+}
+
+// Force-credit a deposit that never reflected, or mark a stuck one failed.
+async function adminDepositAction(req: ApiRequest): Promise<ApiResponse> {
+  await requireAdmin(req);
+  const id = String(req.body?.id || "");
+  const action = String(req.body?.action || "");
+  const [p] = await sql`SELECT * FROM payments WHERE id = ${id}`;
+  if (!p) return err("Deposit not found", 404);
+
+  if (action === "credit") {
+    if (p.status === "paid") return err("This deposit is already credited");
+    await creditDeposit(p.reference); // idempotent: credits the wallet + marks paid
+  } else if (action === "fail") {
+    if (p.status === "paid") return err("Already credited — cannot mark failed");
+    await sql`UPDATE payments SET status = 'failed' WHERE id = ${id}`;
+  } else {
+    return err("Unknown action");
+  }
+  return ok({ ok: true });
+}
+
 async function adminPayouts(req: ApiRequest): Promise<ApiResponse> {
   await requireAdmin(req);
   const rows = await sql`
-    SELECT p.id, p.reference, p.amount, p.wallet, p.bank_name, p.account_number, p.account_name, p.status, p.created_at, u.name, u.email
+    SELECT p.id, p.reference, p.provider_ref, p.amount, p.wallet, p.bank_name, p.account_number, p.account_name, p.status, p.created_at, u.name, u.email
     FROM payouts p JOIN users u ON u.id = p.user_id
     ORDER BY p.created_at DESC LIMIT 100`;
   return ok({
     payouts: rows.map((p: any) => ({
-      id: p.id, reference: p.reference, amount: num(p.amount), wallet: p.wallet,
+      id: p.id, reference: p.reference, nekpayId: p.provider_ref || "", amount: num(p.amount), wallet: p.wallet,
       bankName: p.bank_name, accountNumber: p.account_number, accountName: p.account_name,
       status: p.status, user: p.name, email: p.email, ts: new Date(p.created_at).getTime(),
     })),
@@ -779,6 +839,27 @@ async function adminPayoutAction(req: ApiRequest): Promise<ApiResponse> {
       await tx`UPDATE payouts SET status = 'REJECTED', provider_status = 'manual' WHERE id = ${id}`;
       if (p.tx_id) await tx`DELETE FROM transactions WHERE id = ${p.tx_id}`;
     });
+  } else if (action === "retry") {
+    // Re-dispatch the transfer to the gateway (for a stuck PENDING/SENT payout).
+    const provider = getProvider();
+    const bankEntry = resolveBank(p.bank_name);
+    const net = withdrawNet(num(p.amount));
+    const res = await provider.payout({
+      transferId: p.reference,
+      amount: net,
+      bankName: p.bank_name,
+      bankCode: bankEntry?.code || "",
+      accountNumber: p.account_number,
+      accountName: p.account_name,
+      backUrl: `${ENV.APP_URL}/api/withdrawals/naira/callback`,
+    });
+    if (res.status === "failed") return err(`Retry failed: ${res.message || "gateway rejected the request"}`);
+    const paid = res.status === "paid";
+    await sql.begin(async (tx) => {
+      await tx`UPDATE payouts SET status = ${paid ? "PAID" : "SENT"}, provider_ref = ${res.providerRef || ""}, provider_status = ${res.raw} WHERE id = ${id}`;
+      if (p.tx_id) await tx`UPDATE transactions SET status = ${paid ? "completed" : "pending"} WHERE id = ${p.tx_id}`;
+    });
+    return ok({ ok: true, status: paid ? "paid" : "processing" });
   } else {
     return err("Unknown action");
   }
@@ -907,6 +988,7 @@ const routes: Record<string, Handler> = {
   "POST /plans/activate": activatePlan,
   "POST /fund/initiate": fundInitiate,
   "POST /fund/verify": fundVerify,
+  "POST /deposits/reconcile": depositsReconcile,
   "POST /deposits/nekpay/callback": nekpayCallback,
   "POST /withdraw": withdraw,
   "POST /withdrawals/naira/callback": withdrawalCallback,
@@ -921,6 +1003,8 @@ const routes: Record<string, Handler> = {
   "GET /admin/overview": adminOverview,
   "GET /admin/users": adminUsers,
   "GET /admin/transactions": adminTransactions,
+  "GET /admin/deposits": adminDeposits,
+  "POST /admin/deposits/action": adminDepositAction,
   "GET /admin/payouts": adminPayouts,
   "POST /admin/payouts/action": adminPayoutAction,
   "GET /admin/tasks": adminTasks,

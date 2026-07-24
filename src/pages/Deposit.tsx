@@ -16,7 +16,7 @@ export default function Deposit() {
   const nav = useNavigate();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
-  const { deposit, fund, verifyFund } = useStore();
+  const { deposit, fund, verifyFund, reconcileDeposits } = useStore();
   const [amt, setAmt] = useState("");
   const [pay, setPay] = useState(false);
   const [stage, setStage] = useState<"pay" | "processing" | "done">("pay");
@@ -24,15 +24,20 @@ export default function Deposit() {
   const tax = depositTax(n);
   const total = depositTotal(n);
 
-  // Handle the redirect back from NekPay: /deposit?ref=<reference>
+  // Handle the redirect back from NekPay: /deposit?ref=<reference>. Also
+  // reconcile any recent pending deposits (in case the user returned without
+  // the ref, or the gateway callback was delayed).
   useEffect(() => {
     const ref = params.get("ref");
-    if (!ref) return;
     (async () => {
-      const res = await verifyFund(ref);
-      toast(res.ok ? "Payment confirmed — wallet funded! 🎉" : res.msg, res.ok ? "success" : "error");
-      params.delete("ref");
-      setParams(params, { replace: true });
+      if (ref) {
+        const res = await verifyFund(ref);
+        toast(res.ok ? "Payment confirmed — wallet funded! 🎉" : res.msg, res.ok ? "success" : "error");
+        params.delete("ref");
+        setParams(params, { replace: true });
+      } else {
+        await reconcileDeposits();
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

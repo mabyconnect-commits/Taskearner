@@ -79,6 +79,7 @@ interface State {
   earnActivity: (kind: ActivityKind, refId?: string, count?: number) => Promise<Result>;
   fund: (amount: number) => Promise<Result>;
   verifyFund: (reference: string) => Promise<Result>;
+  reconcileDeposits: () => Promise<void>;
   withdraw: (wallet: "engagement" | "sales", amount: number) => Promise<Result>;
   activatePlan: (id: PlanId) => Promise<Result>;
   addBank: (b: Bank) => Promise<Result>;
@@ -333,6 +334,14 @@ export const useStore = create<State>()(
             transactions: [tx("fund", "Wallet funding (NekPay)", amount, "deposit"), ...s.transactions].slice(0, 60),
           }));
           return { ok: true, msg: "Wallet funded" };
+        },
+
+        reconcileDeposits: async () => {
+          if (!online()) return;
+          try {
+            const r: any = await api.reconcileDeposits();
+            applyUser(r.user, r.transactions);
+          } catch { /* ignore */ }
         },
 
         verifyFund: async (reference) => {
