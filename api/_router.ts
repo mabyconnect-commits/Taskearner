@@ -704,6 +704,18 @@ async function requireAdmin(req: ApiRequest): Promise<any> {
   return u;
 }
 
+// Live NEKpay gateway balance (money available in the merchant account).
+async function adminBalance(req: ApiRequest): Promise<ApiResponse> {
+  await requireAdmin(req);
+  const provider = getProvider();
+  try {
+    const b = await provider.balance();
+    return ok({ ok: b.ok, balance: b.balance, provider: provider.name });
+  } catch (e: any) {
+    return ok({ ok: false, balance: 0, provider: provider.name, error: String(e?.message || e).slice(0, 160) });
+  }
+}
+
 async function adminOverview(req: ApiRequest): Promise<ApiResponse> {
   await requireAdmin(req);
   const [[users], [active], [deps], [pend], [tasks], [sponsored]] = await Promise.all([
@@ -1023,6 +1035,7 @@ const routes: Record<string, Handler> = {
   "GET /sponsored": getSponsored,
   "POST /sponsored/apply": applySponsored,
   "GET /admin/overview": adminOverview,
+  "GET /admin/balance": adminBalance,
   "GET /admin/users": adminUsers,
   "GET /admin/transactions": adminTransactions,
   "GET /admin/deposits": adminDeposits,

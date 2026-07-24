@@ -125,6 +125,7 @@ export const api = {
 
   // Admin
   adminOverview: () => req<{ overview: any }>("/admin/overview"),
+  adminBalance: () => req<{ ok: boolean; balance: number; provider: string; error?: string }>("/admin/balance"),
   adminUsers: (q = "") => req<{ users: any[] }>(`/admin/users${q ? `?q=${encodeURIComponent(q)}` : ""}`),
   adminTransactions: () => req<{ transactions: any[] }>("/admin/transactions"),
   adminDeposits: () => req<{ deposits: any[] }>("/admin/deposits"),

@@ -89,6 +89,7 @@ function Spinner() {
 
 function Overview() {
   const { data, loading } = useAsync(() => api.adminOverview());
+  const { data: bal, loading: balLoading } = useAsync(() => api.adminBalance());
   if (loading) return <Spinner />;
   const o = data?.overview;
   if (!o) return <p className="text-slate-400">Could not load overview.</p>;
@@ -102,13 +103,28 @@ function Overview() {
     { label: "Posts awaiting review", value: o.pendingSponsored.toLocaleString(), tone: "amber" },
   ];
   return (
-    <div className="grid grid-cols-2 gap-3">
-      {cards.map((c) => (
-        <div key={c.label} className="card p-4">
-          <p className="text-xs font-semibold text-slate-400">{c.label}</p>
-          <p className="mt-1 font-display text-2xl font-extrabold">{c.value}</p>
-        </div>
-      ))}
+    <div className="space-y-3">
+      {/* live gateway balance */}
+      <div className="overflow-hidden rounded-4xl bg-gradient-to-br from-ink-800 via-ink-900 to-ink-950 p-6 text-white shadow-card">
+        <p className="flex items-center gap-2 text-sm text-white/60"><Banknote className="h-4 w-4" /> NEKpay gateway balance</p>
+        <p className="mt-1 font-display text-4xl font-extrabold">
+          {balLoading ? "…" : bal?.ok ? formatNaira(bal.balance) : "Unavailable"}
+        </p>
+        {!balLoading && !bal?.ok && (
+          <p className="mt-1 text-xs text-white/50">
+            {(bal as any)?.error ? String((bal as any).error) : "Relay not configured or unreachable."}
+          </p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {cards.map((c) => (
+          <div key={c.label} className="card p-4">
+            <p className="text-xs font-semibold text-slate-400">{c.label}</p>
+            <p className="mt-1 font-display text-2xl font-extrabold">{c.value}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
