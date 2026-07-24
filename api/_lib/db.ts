@@ -24,7 +24,7 @@ if (!ENV.IS_PROD) global.__sql = sql;
 // Idempotent schema creation. Runs once per warm instance.
 export async function ensureSchema(): Promise<void> {
   if (global.__schemaReady) return global.__schemaReady;
-  global.__schemaReady = (async () => {
+  const run = (async () => {
     await sql`
       CREATE TABLE IF NOT EXISTS users (
         id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -107,7 +107,14 @@ export async function ensureSchema(): Promise<void> {
       );
     `;
   })();
-  return global.__schemaReady;
+  // Cache the in-flight promise so concurrent requests share it, but if it
+  // rejects (e.g. DB briefly unreachable on a cold start), clear the cache so
+  // the next request retries instead of failing forever.
+  global.__schemaReady = run;
+  run.catch(() => {
+    global.__schemaReady = undefined;
+  });
+  return run;
 }
 
 export function num(v: unknown): number {

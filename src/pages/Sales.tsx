@@ -89,7 +89,7 @@ export default function Sales() {
         </p>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
           You earn a commission based on the plan your referral activates — from{" "}
-          <b>{formatNaira(800, false)}</b> up to <b>{formatNaira(10000, false)}</b>. The bigger the plan they buy, the more you earn.
+          <b>{formatNaira(850, false)}</b> up to <b>{formatNaira(10200, false)}</b>. The bigger the plan they buy, the more you earn.
         </p>
       </div>
 

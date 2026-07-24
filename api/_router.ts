@@ -353,12 +353,41 @@ async function getReferrals(req: ApiRequest): Promise<ApiResponse> {
   return ok({ referrals: await referralList(uid) });
 }
 
+// Health check that actually probes the database and reports its status,
+// so you can confirm the DB env var is wired without guessing.
+async function health(): Promise<ApiResponse> {
+  const envVar = process.env.DATABASE_URL ? "DATABASE_URL" : process.env.POSTGRES_URL ? "POSTGRES_URL" : null;
+  let connected = false;
+  let migrated = false;
+  let error: string | undefined;
+  if (envVar) {
+    try {
+      await sql`SELECT 1`;
+      connected = true;
+      await ensureSchema();
+      migrated = true;
+    } catch (e: any) {
+      error = String(e?.message || e).slice(0, 180);
+    }
+  }
+  return ok({
+    ok: connected,
+    provider: getProvider().name,
+    db: {
+      configured: !!envVar,
+      envVar,
+      connected,
+      migrated,
+      ...(error ? { error } : {}),
+    },
+  });
+}
+
 // ── Dispatch ────────────────────────────────────────────────────────────────
 
 type Handler = (req: ApiRequest) => Promise<ApiResponse>;
 
 const routes: Record<string, Handler> = {
-  "GET /health": async () => ok({ ok: true, provider: getProvider().name }),
   "POST /auth/signup": signup,
   "POST /auth/login": login,
   "GET /me": me,
@@ -379,8 +408,11 @@ const routes: Record<string, Handler> = {
 
 export async function handleApi(req: ApiRequest): Promise<ApiResponse> {
   try {
-    await ensureSchema();
     const key = `${req.method.toUpperCase()} ${req.path}`;
+    // Health check runs before ensureSchema so it can report DB status
+    // even when the database isn't configured/reachable.
+    if (key === "GET /health") return await health();
+    await ensureSchema();
     const handler = routes[key];
     if (!handler) return err(`No route for ${key}`, 404);
     return await handler(req);
