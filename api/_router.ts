@@ -3,7 +3,7 @@ import { ensureSchema, sql, num } from "./_lib/db";
 import { ApiRequest, ApiResponse, HttpError, ok, err, textResp } from "./_lib/http";
 import { comparePassword, hashPassword, requireAuth, signToken } from "./_lib/auth";
 import { PLANS, planOf, WITHDRAW_MIN, SALES_WITHDRAW_MIN, COOLDOWN_MS, WORD_ROUNDS, dailyMax, utcDay } from "./_lib/plans";
-import { loadState, serializeUser } from "./_lib/state";
+import { loadState, serializeUser, isAdminEmail } from "./_lib/state";
 import { getProvider } from "./_lib/payments";
 import { resolveBank, isInstantPayable } from "./_lib/payments/banks";
 import { ENV } from "./_lib/env";
@@ -174,12 +174,17 @@ async function earn(req: ApiRequest): Promise<ApiResponse> {
     if (!refId) return err("Missing task id");
     if (completed.tasks.includes(refId)) return err("Task already completed", 409);
     if (usedFor("task") >= capFor("task")) return err("You've reached today's task limit for your plan.", 429);
+    const [t] = await sql`SELECT id FROM tasks WHERE id = ${refId} AND active = true`;
+    if (!t) return err("This task is no longer available", 404);
     amount = plan.perTask; title = "Daily task completed";
     completed.tasks = [...completed.tasks, refId];
   } else if (kind === "post") {
     if (!refId) return err("Missing post id");
     if (completed.posts.includes(refId)) return err("Post already shared", 409);
     if (usedFor("post") >= capFor("post")) return err("You've reached today's sponsored-post limit for your plan.", 429);
+    const [sp] = await sql`SELECT * FROM sponsored WHERE id = ${refId} AND status = 'active'`;
+    if (!sp) return err("This post is no longer available", 404);
+    if (num(sp.budget) > 0 && num(sp.spent) + plan.perPost > num(sp.budget)) return err("This campaign has ended", 409);
     amount = plan.perPost; title = "Sponsored post shared";
     completed.posts = [...completed.posts, refId];
   } else {
@@ -203,6 +208,14 @@ async function earn(req: ApiRequest): Promise<ApiResponse> {
     await tx`
       INSERT INTO transactions (user_id, type, title, amount, wallet)
       VALUES (${uid}, ${type}, ${title}, ${amount}, 'engagement')`;
+    if (kind === "post" && refId) {
+      // consume the advertiser's budget; end the campaign when exhausted
+      await tx`
+        UPDATE sponsored
+        SET spent = spent + ${amount},
+            status = CASE WHEN budget > 0 AND spent + ${amount} >= budget THEN 'ended' ELSE status END
+        WHERE id = ${refId}`;
+    }
   });
 
   return ok({ amount, user: await loadState(uid), transactions: await txList(uid) });
@@ -535,6 +548,265 @@ async function health(): Promise<ApiResponse> {
   });
 }
 
+// ── Public marketplace (tasks + sponsored feeds) ─────────────────────────────
+
+async function getTasks(req: ApiRequest): Promise<ApiResponse> {
+  requireAuth(req);
+  const rows = await sql`SELECT id, title, detail, category, link FROM tasks WHERE active = true ORDER BY created_at ASC`;
+  return ok({ tasks: rows.map((t: any) => ({ id: t.id, title: t.title, detail: t.detail, category: t.category, link: t.link })) });
+}
+
+async function getSponsored(req: ApiRequest): Promise<ApiResponse> {
+  requireAuth(req);
+  const rows = await sql`SELECT id, headline, copy, platform FROM sponsored WHERE status = 'active' ORDER BY created_at DESC`;
+  return ok({ sponsored: rows.map((s: any) => ({ id: s.id, headline: s.headline, copy: s.copy, platform: s.platform })) });
+}
+
+// A user pays (from their deposit) to run their own sponsored post. It goes to
+// the admin queue as 'pending' and only appears in the feed once approved.
+const SPONSORED_MIN_BUDGET = 1000;
+async function applySponsored(req: ApiRequest): Promise<ApiResponse> {
+  const uid = requireAuth(req);
+  const headline = String(req.body?.headline || "").trim();
+  const copy = String(req.body?.copy || "").trim();
+  const platform = String(req.body?.platform || "Facebook").trim() || "Facebook";
+  const budget = Math.floor(Number(req.body?.budget) || 0);
+  if (headline.length < 3) return err("Give your campaign a headline");
+  if (copy.length < 10) return err("Write the post content advertisers will share");
+  if (budget < SPONSORED_MIN_BUDGET) return err(`Minimum campaign budget is ₦${SPONSORED_MIN_BUDGET.toLocaleString()}`);
+
+  const [u] = await sql`SELECT deposit FROM users WHERE id = ${uid}`;
+  if (!u) return err("User not found", 404);
+  if (num(u.deposit) < budget) return err("Insufficient deposit balance. Fund your wallet first.");
+
+  await sql.begin(async (tx) => {
+    await tx`UPDATE users SET deposit = deposit - ${budget} WHERE id = ${uid}`;
+    await tx`
+      INSERT INTO transactions (user_id, type, title, amount, wallet)
+      VALUES (${uid}, 'sponsored', ${"Sponsored post: " + headline}, ${-budget}, 'deposit')`;
+    await tx`
+      INSERT INTO sponsored (headline, copy, platform, budget, spent, status, created_by)
+      VALUES (${headline}, ${copy}, ${platform}, ${budget}, 0, 'pending', ${uid})`;
+  });
+  return ok({ user: await loadState(uid), transactions: await txList(uid) });
+}
+
+// ── Admin ────────────────────────────────────────────────────────────────────
+
+async function requireAdmin(req: ApiRequest): Promise<any> {
+  const uid = requireAuth(req);
+  const [u] = await sql`SELECT * FROM users WHERE id = ${uid}`;
+  if (!u) throw new HttpError("User not found", 404);
+  if (!isAdminEmail(u.email)) throw new HttpError("Admin access required", 403);
+  return u;
+}
+
+async function adminOverview(req: ApiRequest): Promise<ApiResponse> {
+  await requireAdmin(req);
+  const [[users], [active], [deps], [pend], [tasks], [sponsored]] = await Promise.all([
+    sql`SELECT count(*)::int AS n FROM users`,
+    sql`SELECT count(*)::int AS n FROM users WHERE plan <> 'free'`,
+    sql`SELECT COALESCE(sum(amount),0) AS s FROM transactions WHERE type = 'fund'`,
+    sql`SELECT count(*)::int AS n FROM payouts WHERE status = 'PENDING'`,
+    sql`SELECT count(*)::int AS n FROM tasks WHERE active = true`,
+    sql`SELECT count(*)::int AS n FROM sponsored WHERE status = 'pending'`,
+  ]);
+  const [pay] = await sql`SELECT COALESCE(sum(amount),0) AS s FROM transactions WHERE type IN ('withdraw') AND status = 'completed'`;
+  return ok({
+    overview: {
+      users: users.n,
+      activeUsers: active.n,
+      totalDeposits: num(deps.s),
+      totalPaidOut: Math.abs(num(pay.s)),
+      pendingPayouts: pend.n,
+      activeTasks: tasks.n,
+      pendingSponsored: sponsored.n,
+    },
+  });
+}
+
+async function adminUsers(req: ApiRequest): Promise<ApiResponse> {
+  await requireAdmin(req);
+  const q = String(req.query.q || "").trim().toLowerCase();
+  const rows = q
+    ? await sql`
+        SELECT id, name, username, email, phone, plan, engagement, sales, deposit, created_at
+        FROM users WHERE lower(email) LIKE ${"%" + q + "%"} OR lower(name) LIKE ${"%" + q + "%"} OR lower(username) LIKE ${"%" + q + "%"}
+        ORDER BY created_at DESC LIMIT 100`
+    : await sql`
+        SELECT id, name, username, email, phone, plan, engagement, sales, deposit, created_at
+        FROM users ORDER BY created_at DESC LIMIT 100`;
+  return ok({
+    users: rows.map((u: any) => ({
+      id: u.id, name: u.name, username: u.username, email: u.email, phone: u.phone,
+      plan: u.plan, engagement: num(u.engagement), sales: num(u.sales), deposit: num(u.deposit),
+      ts: new Date(u.created_at).getTime(),
+    })),
+  });
+}
+
+async function adminTransactions(req: ApiRequest): Promise<ApiResponse> {
+  await requireAdmin(req);
+  const rows = await sql`
+    SELECT t.id, t.type, t.title, t.amount, t.wallet, t.status, t.created_at, u.name, u.email
+    FROM transactions t JOIN users u ON u.id = t.user_id
+    ORDER BY t.created_at DESC LIMIT 200`;
+  return ok({
+    transactions: rows.map((t: any) => ({
+      id: t.id, type: t.type, title: t.title, amount: num(t.amount), wallet: t.wallet,
+      status: t.status, user: t.name, email: t.email, ts: new Date(t.created_at).getTime(),
+    })),
+  });
+}
+
+async function adminPayouts(req: ApiRequest): Promise<ApiResponse> {
+  await requireAdmin(req);
+  const rows = await sql`
+    SELECT p.id, p.reference, p.amount, p.wallet, p.bank_name, p.account_number, p.account_name, p.status, p.created_at, u.name, u.email
+    FROM payouts p JOIN users u ON u.id = p.user_id
+    ORDER BY p.created_at DESC LIMIT 100`;
+  return ok({
+    payouts: rows.map((p: any) => ({
+      id: p.id, reference: p.reference, amount: num(p.amount), wallet: p.wallet,
+      bankName: p.bank_name, accountNumber: p.account_number, accountName: p.account_name,
+      status: p.status, user: p.name, email: p.email, ts: new Date(p.created_at).getTime(),
+    })),
+  });
+}
+
+// Admin marks a queued payout as paid (settled off-platform) or rejects it (refund).
+async function adminPayoutAction(req: ApiRequest): Promise<ApiResponse> {
+  await requireAdmin(req);
+  const id = String(req.body?.id || "");
+  const action = String(req.body?.action || "");
+  const [p] = await sql`SELECT * FROM payouts WHERE id = ${id}`;
+  if (!p) return err("Payout not found", 404);
+  if (p.status === "PAID" || p.status === "REJECTED") return err("This payout is already settled");
+
+  if (action === "approve") {
+    await sql.begin(async (tx) => {
+      await tx`UPDATE payouts SET status = 'PAID', provider_status = 'manual' WHERE id = ${id}`;
+      if (p.tx_id) await tx`UPDATE transactions SET status = 'completed' WHERE id = ${p.tx_id}`;
+    });
+  } else if (action === "reject") {
+    await sql.begin(async (tx) => {
+      if (p.wallet === "sales") await tx`UPDATE users SET sales = sales + ${num(p.amount)} WHERE id = ${p.user_id}`;
+      else await tx`UPDATE users SET engagement = engagement + ${num(p.amount)} WHERE id = ${p.user_id}`;
+      await tx`UPDATE payouts SET status = 'REJECTED', provider_status = 'manual' WHERE id = ${id}`;
+      if (p.tx_id) await tx`DELETE FROM transactions WHERE id = ${p.tx_id}`;
+    });
+  } else {
+    return err("Unknown action");
+  }
+  return ok({ ok: true });
+}
+
+async function adminTasks(req: ApiRequest): Promise<ApiResponse> {
+  await requireAdmin(req);
+  const rows = await sql`SELECT id, title, detail, category, link, active, created_at FROM tasks ORDER BY created_at DESC`;
+  return ok({
+    tasks: rows.map((t: any) => ({
+      id: t.id, title: t.title, detail: t.detail, category: t.category, link: t.link,
+      active: t.active, ts: new Date(t.created_at).getTime(),
+    })),
+  });
+}
+
+async function adminCreateTask(req: ApiRequest): Promise<ApiResponse> {
+  await requireAdmin(req);
+  const title = String(req.body?.title || "").trim();
+  const detail = String(req.body?.detail || "").trim();
+  const category = String(req.body?.category || "social").trim() || "social";
+  const link = String(req.body?.link || "").trim();
+  if (title.length < 3) return err("Task title is required");
+  const id = `t_${Date.now().toString(36)}_${crypto.randomBytes(2).toString("hex")}`;
+  await sql`INSERT INTO tasks (id, title, detail, category, link) VALUES (${id}, ${title}, ${detail}, ${category}, ${link})`;
+  return ok({ ok: true, id }, 201);
+}
+
+async function adminTaskAction(req: ApiRequest): Promise<ApiResponse> {
+  await requireAdmin(req);
+  const id = String(req.body?.id || "");
+  const action = String(req.body?.action || "");
+  const [t] = await sql`SELECT id FROM tasks WHERE id = ${id}`;
+  if (!t) return err("Task not found", 404);
+  if (action === "enable") await sql`UPDATE tasks SET active = true WHERE id = ${id}`;
+  else if (action === "disable") await sql`UPDATE tasks SET active = false WHERE id = ${id}`;
+  else if (action === "delete") await sql`DELETE FROM tasks WHERE id = ${id}`;
+  else return err("Unknown action");
+  return ok({ ok: true });
+}
+
+async function adminSponsored(req: ApiRequest): Promise<ApiResponse> {
+  await requireAdmin(req);
+  const rows = await sql`
+    SELECT s.id, s.headline, s.copy, s.platform, s.budget, s.spent, s.status, s.created_at, u.name AS advertiser, u.email
+    FROM sponsored s LEFT JOIN users u ON u.id = s.created_by
+    ORDER BY s.created_at DESC`;
+  return ok({
+    sponsored: rows.map((s: any) => ({
+      id: s.id, headline: s.headline, copy: s.copy, platform: s.platform,
+      budget: num(s.budget), spent: num(s.spent), status: s.status,
+      advertiser: s.advertiser || "Official", email: s.email || "",
+      ts: new Date(s.created_at).getTime(),
+    })),
+  });
+}
+
+async function adminCreateSponsored(req: ApiRequest): Promise<ApiResponse> {
+  await requireAdmin(req);
+  const headline = String(req.body?.headline || "").trim();
+  const copy = String(req.body?.copy || "").trim();
+  const platform = String(req.body?.platform || "Facebook").trim() || "Facebook";
+  const budget = Math.max(0, Math.floor(Number(req.body?.budget) || 0));
+  if (headline.length < 3) return err("Headline is required");
+  if (copy.length < 10) return err("Post content is required");
+  // Admin-created posts are official (budget 0 = unlimited) and go live immediately.
+  await sql`INSERT INTO sponsored (headline, copy, platform, budget, spent, status) VALUES (${headline}, ${copy}, ${platform}, ${budget}, 0, 'active')`;
+  return ok({ ok: true }, 201);
+}
+
+// Approve a user-submitted campaign (pending → active), reject it (refund the
+// advertiser's budget), or end an active one (refund the unspent remainder).
+async function adminSponsoredAction(req: ApiRequest): Promise<ApiResponse> {
+  await requireAdmin(req);
+  const id = String(req.body?.id || "");
+  const action = String(req.body?.action || "");
+  const [s] = await sql`SELECT * FROM sponsored WHERE id = ${id}`;
+  if (!s) return err("Campaign not found", 404);
+
+  if (action === "approve") {
+    if (s.status !== "pending") return err("Only pending campaigns can be approved");
+    await sql`UPDATE sponsored SET status = 'active' WHERE id = ${id}`;
+  } else if (action === "reject") {
+    if (s.status !== "pending") return err("Only pending campaigns can be rejected");
+    await sql.begin(async (tx) => {
+      await tx`UPDATE sponsored SET status = 'rejected' WHERE id = ${id}`;
+      if (s.created_by && num(s.budget) > 0) {
+        await tx`UPDATE users SET deposit = deposit + ${num(s.budget)} WHERE id = ${s.created_by}`;
+        await tx`
+          INSERT INTO transactions (user_id, type, title, amount, wallet)
+          VALUES (${s.created_by}, 'refund', ${"Refund: " + s.headline}, ${num(s.budget)}, 'deposit')`;
+      }
+    });
+  } else if (action === "end") {
+    if (s.status !== "active") return err("Only active campaigns can be ended");
+    const refund = Math.max(0, num(s.budget) - num(s.spent));
+    await sql.begin(async (tx) => {
+      await tx`UPDATE sponsored SET status = 'ended' WHERE id = ${id}`;
+      if (s.created_by && refund > 0) {
+        await tx`UPDATE users SET deposit = deposit + ${refund} WHERE id = ${s.created_by}`;
+        await tx`
+          INSERT INTO transactions (user_id, type, title, amount, wallet)
+          VALUES (${s.created_by}, 'refund', ${"Refund (unspent): " + s.headline}, ${refund}, 'deposit')`;
+      }
+    });
+  } else {
+    return err("Unknown action");
+  }
+  return ok({ ok: true });
+}
+
 // ── Dispatch ────────────────────────────────────────────────────────────────
 
 type Handler = (req: ApiRequest) => Promise<ApiResponse>;
@@ -558,6 +830,20 @@ const routes: Record<string, Handler> = {
   "POST /bills/pay": payBill,
   "GET /transactions": getTransactions,
   "GET /referrals": getReferrals,
+  "GET /tasks": getTasks,
+  "GET /sponsored": getSponsored,
+  "POST /sponsored/apply": applySponsored,
+  "GET /admin/overview": adminOverview,
+  "GET /admin/users": adminUsers,
+  "GET /admin/transactions": adminTransactions,
+  "GET /admin/payouts": adminPayouts,
+  "POST /admin/payouts/action": adminPayoutAction,
+  "GET /admin/tasks": adminTasks,
+  "POST /admin/tasks": adminCreateTask,
+  "POST /admin/tasks/action": adminTaskAction,
+  "GET /admin/sponsored": adminSponsored,
+  "POST /admin/sponsored": adminCreateSponsored,
+  "POST /admin/sponsored/action": adminSponsoredAction,
 };
 
 export async function handleApi(req: ApiRequest): Promise<ApiResponse> {

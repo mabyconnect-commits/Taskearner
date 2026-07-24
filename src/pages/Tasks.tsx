@@ -1,24 +1,36 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, Loader2, Instagram, PlaySquare, Star, ClipboardList, Send, Crown } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useStore } from "@/store/useStore";
 import { planById, DAILY_TASKS, DailyTask } from "@/lib/data";
+import { api } from "@/lib/api";
 import { formatNaira } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 
-const iconFor = (c: DailyTask["category"]) =>
+const iconFor = (c: string) =>
   c === "social" ? Instagram : c === "watch" ? PlaySquare : c === "review" ? Star : c === "survey" ? ClipboardList : Send;
 
 export default function Tasks() {
   const nav = useNavigate();
   const toast = useToast();
-  const { plan, completedTasks, earnActivity } = useStore();
+  const { plan, completedTasks, earnActivity, mode } = useStore();
   const p = planById(plan);
   const [busy, setBusy] = useState<string | null>(null);
   const [tab, setTab] = useState<"available" | "completed">("available");
+  // Live tasks from the DB (admin-managed); fall back to bundled list offline.
+  const [tasks, setTasks] = useState<DailyTask[]>(DAILY_TASKS);
+
+  useEffect(() => {
+    if (mode !== "online") return;
+    let alive = true;
+    api.tasks()
+      .then((r) => { if (alive) setTasks(r.tasks as unknown as DailyTask[]); })
+      .catch(() => { /* keep fallback */ });
+    return () => { alive = false; };
+  }, [mode]);
 
   if (plan === "free") return <Locked nav={nav} />;
 
@@ -32,8 +44,8 @@ export default function Tasks() {
     }, 1200);
   };
 
-  const done = completedTasks.filter((id) => DAILY_TASKS.some((t) => t.id === id)).length;
-  const shown = DAILY_TASKS.filter((t) =>
+  const done = completedTasks.filter((id) => tasks.some((t) => t.id === id)).length;
+  const shown = tasks.filter((t) =>
     tab === "available" ? !completedTasks.includes(t.id) : completedTasks.includes(t.id),
   );
 
@@ -49,10 +61,10 @@ export default function Tasks() {
               cx="50" cy="50" r="44"
               className="fill-none stroke-brand-500" strokeWidth="10" strokeLinecap="round"
               strokeDasharray={2 * Math.PI * 44}
-              strokeDashoffset={2 * Math.PI * 44 * (1 - done / DAILY_TASKS.length)}
+              strokeDashoffset={2 * Math.PI * 44 * (1 - done / (tasks.length || 1))}
             />
           </svg>
-          <span className="font-display text-sm font-extrabold">{done}/{DAILY_TASKS.length}</span>
+          <span className="font-display text-sm font-extrabold">{done}/{tasks.length}</span>
         </div>
         <div>
           <p className="font-display text-lg font-bold">Today's progress</p>
@@ -71,7 +83,7 @@ export default function Tasks() {
               tab === tb ? "bg-brand-500 text-slate-900 shadow" : "text-slate-500",
             )}
           >
-            {tb} {tb === "available" ? `(${DAILY_TASKS.length - done})` : `(${done})`}
+            {tb} {tb === "available" ? `(${tasks.length - done})` : `(${done})`}
           </button>
         ))}
       </div>

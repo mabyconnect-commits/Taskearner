@@ -5,6 +5,11 @@ export const ENV = {
     process.env.POSTGRES_URL ||
     "postgres://taskearner:taskearner@127.0.0.1:5432/taskearner",
   JWT_SECRET: process.env.JWT_SECRET || "dev-secret-change-me-in-production",
+  // Comma-separated emails that get admin access.
+  ADMIN_EMAILS: (process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
   NODE_ENV: process.env.NODE_ENV || "development",
   IS_PROD: (process.env.VERCEL_ENV || process.env.NODE_ENV) === "production",
 

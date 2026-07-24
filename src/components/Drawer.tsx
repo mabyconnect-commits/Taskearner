@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   X, Home, Coins, Receipt, Wallet, ArrowUpCircle, Crown, Users, Trophy, Bell, User,
-  Sun, Moon, Send, MessageCircle, LogOut,
+  Sun, Moon, Send, MessageCircle, LogOut, Shield,
 } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { cn } from "@/lib/cn";
@@ -23,7 +23,7 @@ const links = [
 
 export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const nav = useNavigate();
-  const { name, username, theme, setTheme, logout } = useStore();
+  const { name, username, theme, setTheme, logout, isAdmin } = useStore();
 
   const go = (to: string) => {
     onClose();
@@ -86,6 +86,15 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
             </div>
 
             <nav className="no-scrollbar mt-3 flex-1 space-y-0.5 overflow-y-auto py-2">
+              {isAdmin && (
+                <button
+                  onClick={() => go("/admin")}
+                  className="flex w-full items-center gap-4 rounded-2xl bg-brand-50 px-3 py-3 text-left font-semibold text-slate-800 transition hover:bg-brand-100 dark:bg-brand-500/10 dark:text-brand-200 dark:hover:bg-brand-500/20"
+                >
+                  <Shield className="h-6 w-6 text-brand-600" strokeWidth={2.1} />
+                  Admin Dashboard
+                </button>
+              )}
               {links.map(({ label, icon: Icon, to }) => (
                 <button
                   key={label}

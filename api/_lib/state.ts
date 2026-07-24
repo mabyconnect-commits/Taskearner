@@ -1,6 +1,7 @@
 import { sql, num } from "./db";
 import { HttpError } from "./http";
 import { planOf, dailyMax, utcDay } from "./plans";
+import { ENV } from "./env";
 
 export interface Bank {
   bankName: string;
@@ -27,6 +28,11 @@ export interface UserState {
   dailyEarned: number;
   dailyCaps: { voice: number; word: number; task: number; post: number };
   dailyUsed: { voice: number; word: number; task: number; post: number };
+  isAdmin: boolean;
+}
+
+export function isAdminEmail(email: string): boolean {
+  return ENV.ADMIN_EMAILS.includes(String(email || "").toLowerCase());
 }
 
 export function serializeUser(u: any, bank?: any): UserState {
@@ -60,6 +66,7 @@ export function serializeUser(u: any, bank?: any): UserState {
     dailyEarned: fresh ? num(rawDaily.earned) : 0,
     dailyCaps: plan.daily,
     dailyUsed: used,
+    isAdmin: isAdminEmail(u.email),
   };
 }
 

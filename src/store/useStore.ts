@@ -34,6 +34,7 @@ interface State {
   booting: boolean;
   mode: Mode;
   authed: boolean;
+  isAdmin: boolean;
   name: string;
   username: string;
   email: string;
@@ -72,6 +73,7 @@ interface State {
   changePassword: (p: { currentPassword: string; newPassword: string }) => Promise<Result>;
   updateProfile: (p: { name?: string; phone?: string; email?: string }) => Promise<Result>;
   payBill: (p: { amount: number; title: string }) => Promise<Result>;
+  advertisePost: (p: { headline: string; copy: string; platform: string; budget: number }) => Promise<Result>;
   refresh: () => Promise<void>;
   simulateReferral: () => Promise<Result>;
 }
@@ -99,6 +101,7 @@ export const useStore = create<State>()(
           username: user.username,
           email: user.email,
           phone: user.phone,
+          isAdmin: !!user.isAdmin,
           plan: user.plan as PlanId,
           socialLinked: user.socialLinked,
           engagement: user.engagement,
@@ -126,6 +129,7 @@ export const useStore = create<State>()(
         booting: true,
         mode: "offline",
         authed: false,
+        isAdmin: false,
         name: "",
         username: "",
         email: "",
@@ -225,7 +229,7 @@ export const useStore = create<State>()(
 
         logout: () => {
           setToken("");
-          set({ authed: false });
+          set({ authed: false, isAdmin: false });
         },
 
         refresh: async () => {
@@ -455,6 +459,27 @@ export const useStore = create<State>()(
             transactions: [tx("bill", title, -amount, "engagement"), ...st.transactions].slice(0, 60),
           }));
           return { ok: true, msg: "Payment successful." };
+        },
+
+        advertisePost: async ({ headline, copy, platform, budget }) => {
+          if (online()) {
+            try {
+              const r: any = await api.applySponsored({ headline, copy, platform, budget });
+              applyUser(r.user, r.transactions);
+              return { ok: true, msg: "Campaign submitted! It goes live after review." };
+            } catch (e) {
+              return { ok: false, msg: errMsg(e) };
+            }
+          }
+          // offline demo: just deduct from deposit
+          const s = get();
+          if (budget < SALES_WITHDRAW_MIN) return { ok: false, msg: `Minimum campaign budget is ₦${SALES_WITHDRAW_MIN.toLocaleString()}.` };
+          if (s.deposit < budget) return { ok: false, msg: "Insufficient deposit balance. Fund your wallet first." };
+          set((st) => ({
+            deposit: st.deposit - budget,
+            transactions: [tx("plan", `Sponsored post: ${headline}`, -budget, "deposit"), ...st.transactions].slice(0, 60),
+          }));
+          return { ok: true, msg: "Campaign submitted! It goes live after review." };
         },
 
         simulateReferral: async () => {

@@ -62,6 +62,22 @@ export interface ServerUser {
   dailyEarned: number;
   dailyCaps: { voice: number; word: number; task: number; post: number };
   dailyUsed: { voice: number; word: number; task: number; post: number };
+  isAdmin: boolean;
+}
+
+export interface ServerTask {
+  id: string;
+  title: string;
+  detail: string;
+  category: string;
+  link: string;
+}
+
+export interface ServerSponsored {
+  id: string;
+  headline: string;
+  copy: string;
+  platform: string;
 }
 
 export const api = {
@@ -81,4 +97,26 @@ export const api = {
   payBill: (b: { amount: number; title: string }) => req("/bills/pay", "POST", b),
   transactions: () => req<{ transactions: any[] }>("/transactions"),
   referrals: () => req<{ referrals: any[] }>("/referrals"),
+
+  // Marketplace (live tasks + sponsored feeds, and user-paid campaign apply)
+  tasks: () => req<{ tasks: ServerTask[] }>("/tasks"),
+  sponsored: () => req<{ sponsored: ServerSponsored[] }>("/sponsored"),
+  applySponsored: (b: { headline: string; copy: string; platform: string; budget: number }) =>
+    req("/sponsored/apply", "POST", b),
+
+  // Admin
+  adminOverview: () => req<{ overview: any }>("/admin/overview"),
+  adminUsers: (q = "") => req<{ users: any[] }>(`/admin/users${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+  adminTransactions: () => req<{ transactions: any[] }>("/admin/transactions"),
+  adminPayouts: () => req<{ payouts: any[] }>("/admin/payouts"),
+  adminPayoutAction: (b: { id: string; action: "approve" | "reject" }) => req("/admin/payouts/action", "POST", b),
+  adminTasks: () => req<{ tasks: any[] }>("/admin/tasks"),
+  adminCreateTask: (b: { title: string; detail: string; category: string; link?: string }) =>
+    req("/admin/tasks", "POST", b),
+  adminTaskAction: (b: { id: string; action: "enable" | "disable" | "delete" }) => req("/admin/tasks/action", "POST", b),
+  adminSponsored: () => req<{ sponsored: any[] }>("/admin/sponsored"),
+  adminCreateSponsored: (b: { headline: string; copy: string; platform: string; budget?: number }) =>
+    req("/admin/sponsored", "POST", b),
+  adminSponsoredAction: (b: { id: string; action: "approve" | "reject" | "end" }) =>
+    req("/admin/sponsored/action", "POST", b),
 };

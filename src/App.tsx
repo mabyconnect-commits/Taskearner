@@ -22,6 +22,7 @@ import Leaderboard from "@/pages/Leaderboard";
 import Notifications from "@/pages/Notifications";
 import Bills from "@/pages/Bills";
 import Security from "@/pages/Security";
+import Admin from "@/pages/Admin";
 
 function Protected({ children }: { children: JSX.Element }) {
   const authed = useStore((s) => s.authed);
@@ -80,6 +81,7 @@ export default function App() {
         <Route path="/leaderboard" element={<Protected><Leaderboard /></Protected>} />
         <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
         <Route path="/bills/:type" element={<Protected><Bills /></Protected>} />
+        <Route path="/admin" element={<Protected><Admin /></Protected>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </ToastProvider>

@@ -115,6 +115,65 @@ export async function ensureSchema(): Promise<void> {
     await sql`ALTER TABLE payouts ADD COLUMN IF NOT EXISTS provider_status text NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE payouts ADD COLUMN IF NOT EXISTS tx_id uuid`;
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily jsonb NOT NULL DEFAULT '{}'::jsonb`;
+
+    // Admin-managed daily tasks
+    await sql`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id         text PRIMARY KEY,
+        title      text NOT NULL,
+        detail     text NOT NULL DEFAULT '',
+        category   text NOT NULL DEFAULT 'social',
+        link       text NOT NULL DEFAULT '',
+        active     boolean NOT NULL DEFAULT true,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+    `;
+
+    // Sponsored posts (official + user-submitted/advertiser-funded)
+    await sql`
+      CREATE TABLE IF NOT EXISTS sponsored (
+        id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        headline   text NOT NULL,
+        copy       text NOT NULL,
+        platform   text NOT NULL DEFAULT 'Facebook',
+        budget     numeric(14,2) NOT NULL DEFAULT 0,
+        spent      numeric(14,2) NOT NULL DEFAULT 0,
+        status     text NOT NULL DEFAULT 'active',
+        created_by uuid REFERENCES users(id) ON DELETE SET NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+    `;
+
+    // Seed default tasks once (so the app works before an admin adds any)
+    const [tc] = await sql`SELECT count(*)::int AS n FROM tasks`;
+    if (tc.n === 0) {
+      const defaults = [
+        ["t1", "Follow Task Earner Africa on Instagram", "Tap follow and confirm your handle.", "social"],
+        ["t2", "Watch a 30s promo video", "Watch the full clip to unlock the reward.", "watch"],
+        ["t3", "Rate our app 5 stars", "Leave an honest review on the store.", "review"],
+        ["t4", "Take a 2-minute survey", "Tell us how you like to earn online.", "survey"],
+        ["t5", "Join our Telegram channel", "Stay updated with new earning drops.", "social"],
+        ["t6", "Share the daily quote", "Post today's motivation to your story.", "social"],
+        ["t7", "Retweet the pinned post", "Amplify Task Earner Africa to your followers.", "social"],
+        ["t8", "Watch: How payouts work", "Learn how withdrawals are processed.", "watch"],
+      ];
+      for (const [id, title, detail, category] of defaults) {
+        await sql`INSERT INTO tasks (id, title, detail, category) VALUES (${id}, ${title}, ${detail}, ${category}) ON CONFLICT DO NOTHING`;
+      }
+    }
+    const [sc] = await sql`SELECT count(*)::int AS n FROM sponsored`;
+    if (sc.n === 0) {
+      const posts = [
+        ["TASK EARNER IS PAYING", "I just got paid on Task Earner Africa for reading sentences aloud. Join with my link!", "WhatsApp"],
+        ["Your voice is currency", "Turn your talk and daily tasks into alerts. Task Earner Africa pays per session — no stress.", "Facebook"],
+        ["Side hustle unlocked", "Made ₦2,000 today on @taskearnerafrica between classes. This is real.", "X"],
+        ["Pay once, earn forever", "Lifetime plans on Task Earner Africa. Activate once and earn every single day.", "Instagram"],
+        ["Talk = money", "POV: your voice is now a paycheck. Task Earner Africa is the wave. 🌍", "TikTok"],
+      ];
+      for (const [headline, copy, platform] of posts) {
+        await sql`INSERT INTO sponsored (headline, copy, platform, budget, status) VALUES (${headline}, ${copy}, ${platform}, 0, 'active')`;
+      }
+    }
   })();
   // Cache the in-flight promise so concurrent requests share it, but if it
   // rejects (e.g. DB briefly unreachable on a cold start), clear the cache so
