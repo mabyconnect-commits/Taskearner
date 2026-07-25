@@ -485,7 +485,9 @@ async function withdraw(req: ApiRequest): Promise<ApiResponse> {
       await tx`UPDATE payouts SET status = 'REJECTED', provider_status = ${res.raw} WHERE id = ${reserved.payoutId}`;
       await tx`DELETE FROM transactions WHERE id = ${reserved.txId}`;
     });
-    return err(res.message ? "Withdrawal declined. No funds were deducted." : "Withdrawal declined. No funds were deducted.");
+    const why = res.message || String(res.raw || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 180);
+    console.error("[nekpay] payout declined:", why, res.raw);
+    return err(`Withdrawal declined: ${why || "gateway rejected the transfer"}. No funds were deducted.`);
   }
 
   const paid = res.status === "paid";
