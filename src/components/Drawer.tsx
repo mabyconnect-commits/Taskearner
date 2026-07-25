@@ -118,7 +118,7 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
               </a>
               <a
                 className="btn-ghost w-full py-3"
-                href="https://t.me/taskearning101"
+                href="https://t.me/+ABIZY4MltSdmNzI5"
                 target="_blank"
                 rel="noopener noreferrer"
               >
