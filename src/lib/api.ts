@@ -144,4 +144,5 @@ export const api = {
     req("/admin/sponsored", "POST", b),
   adminSponsoredAction: (b: { id: string; action: "approve" | "reject" | "end" }) =>
     req("/admin/sponsored/action", "POST", b),
+  adminTelegramSetup: () => req<{ ok: boolean; webhookUrl: string; supportGroup: string; info?: any; setResult?: any }>("/admin/telegram/setup", "POST"),
 };

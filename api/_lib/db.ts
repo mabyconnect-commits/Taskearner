@@ -165,6 +165,33 @@ export async function ensureSchema(): Promise<void> {
       );
     `;
 
+    // Telegram support bot: per-chat conversation state (serverless is stateless,
+    // so the "what is this chat waiting to send me" flag lives here).
+    await sql`
+      CREATE TABLE IF NOT EXISTS bot_state (
+        chat_id    text PRIMARY KEY,
+        state      text NOT NULL DEFAULT 'idle',
+        data       jsonb NOT NULL DEFAULT '{}'::jsonb,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `;
+    // Escalated support tickets. group_msg_id links a ticket to the message the
+    // bot posted in the ops group, so a staff reply resolves the right ticket.
+    await sql`
+      CREATE TABLE IF NOT EXISTS support_tickets (
+        id           serial PRIMARY KEY,
+        kind         text NOT NULL,
+        chat_id      text NOT NULL,
+        tg_username  text NOT NULL DEFAULT '',
+        reference    text NOT NULL DEFAULT '',
+        details      text NOT NULL DEFAULT '',
+        status       text NOT NULL DEFAULT 'open',
+        group_msg_id bigint,
+        created_at   timestamptz NOT NULL DEFAULT now()
+      );
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS idx_ticket_groupmsg ON support_tickets(group_msg_id);`;
+
     // Seed default tasks once (so the app works before an admin adds any)
     const [tc] = await sql`SELECT count(*)::int AS n FROM tasks`;
     if (tc.n === 0) {

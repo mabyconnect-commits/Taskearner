@@ -8,6 +8,10 @@ import { getProvider } from "./_lib/payments/index.js";
 import { nekpayBankCode } from "./_lib/payments/banks.js";
 import { ENV } from "./_lib/env.js";
 import { listBanks, resolveAccount } from "./_lib/flutterwave.js";
+import {
+  botEnabled, sendMessage as tgSend, editMessage as tgEdit, answerCallback as tgAnswer,
+  sendToSupport, mainMenu, linkButtons, setWebhook, getWebhookInfo,
+} from "./_lib/telegram.js";
 
 function formatNgn(n: number): string {
   return `₦${Math.round(n).toLocaleString("en-NG")}`;
@@ -1066,6 +1070,251 @@ async function adminSponsoredAction(req: ApiRequest): Promise<ApiResponse> {
   return ok({ ok: true });
 }
 
+// ── Telegram support bot ─────────────────────────────────────────────────────
+// A user reports "deposit not credited" / "withdrawal not received"; the bot
+// tries to fix it automatically using the SAME reconcile logic the app uses
+// (NEKpay queryOrder → creditDeposit for deposits; settlePayout for payouts).
+// If it can't, it opens a ticket in the ops group; a staff reply of "done" /
+// "success" / "paid" resolves the ticket, applies the in-app effect, and
+// notifies the user.
+
+const FAQ_TEXT =
+  "<b>❓ TaskEarner — Quick Help</b>\n\n" +
+  "<b>How do I earn?</b>\nActivate a plan, then open <b>Earn</b> and complete your daily activities (Voice, Word, Task, Sponsored post). Each activity pays once per day.\n\n" +
+  "<b>How do I fund my wallet?</b>\nTap <b>Fund Wallet</b>, enter an amount and pay. Deposits reflect automatically once confirmed — reopen the app if it takes a minute.\n\n" +
+  "<b>How do withdrawals work?</b>\nAdd your bank account under <b>Withdraw</b>, then request a payout. Most banks are paid automatically; a few are settled by hand within a short while.\n\n" +
+  "<b>Deposit or withdrawal stuck?</b>\nUse the buttons below with your reference and I'll check it live and fix it if I can.";
+
+async function getBotState(chatId: string): Promise<{ state: string; data: any }> {
+  const [r] = await sql`SELECT state, data FROM bot_state WHERE chat_id = ${chatId}`;
+  return r ? { state: r.state, data: r.data || {} } : { state: "idle", data: {} };
+}
+async function setBotState(chatId: string, state: string, data: any = {}): Promise<void> {
+  await sql`
+    INSERT INTO bot_state (chat_id, state, data, updated_at)
+    VALUES (${chatId}, ${state}, ${sql.json(data)}, now())
+    ON CONFLICT (chat_id) DO UPDATE SET state = EXCLUDED.state, data = EXCLUDED.data, updated_at = now()`;
+}
+
+const backToMenu = () => [[{ text: "⬅️ Back to menu", callback_data: "main_menu" }]];
+
+// Escalate to the ops group and record the ticket. Returns the ticket id.
+async function escalateTicket(kind: "deposit" | "withdrawal", chatId: string, uname: string, reference: string, details: string): Promise<number> {
+  const [t] = await sql`
+    INSERT INTO support_tickets (kind, chat_id, tg_username, reference, details)
+    VALUES (${kind}, ${chatId}, ${uname}, ${reference}, ${details}) RETURNING id`;
+  const label = kind === "deposit" ? "Deposit not credited" : "Withdrawal not received";
+  const body =
+    `🎫 <b>Ticket #T${t.id}</b> — ${label}\n` +
+    `From: ${uname} (chat <code>${chatId}</code>)\n` +
+    `Ref: <code>${reference || "—"}</code>\n\n${details}\n\n` +
+    `↩️ <i>Reply to this message with</i> <b>done</b> / <b>success</b> / <b>paid</b> <i>to resolve and auto-notify the user.</i>`;
+  const gid = await sendToSupport(body);
+  if (gid) await sql`UPDATE support_tickets SET group_msg_id = ${gid} WHERE id = ${t.id}`;
+  return t.id as number;
+}
+
+// Try to auto-fix a deposit by reference; escalate if it can't be confirmed.
+async function botHandleDeposit(chatId: string, uname: string, ref: string): Promise<void> {
+  await setBotState(chatId, "idle");
+  const cleaned = ref.replace(/\s+/g, "").trim();
+  const [p] = await sql`SELECT * FROM payments WHERE reference = ${cleaned} AND purpose = 'fund'`;
+  if (!p) {
+    const id = await escalateTicket("deposit", chatId, uname, cleaned, "No matching deposit found for this reference — user says it's not credited.");
+    await tgSend(chatId, `I couldn't find a deposit with reference <code>${cleaned}</code>. I've opened <b>ticket #T${id}</b> and our payments team will verify it. You'll get a message here the moment it's sorted.`, backToMenu());
+    return;
+  }
+  if (p.status === "paid") {
+    await tgSend(chatId, `✅ Good news — this deposit is already credited. <b>${formatNgn(num(p.amount))}</b> is in your wallet. Reopen the app and pull to refresh if you don't see it.`, backToMenu());
+    return;
+  }
+  // Ask NEKpay directly, credit if it now confirms (idempotent).
+  try {
+    const q = await getProvider().queryOrder(p.reference);
+    if (q.paid) {
+      await creditDeposit(p.reference);
+      await tgSend(chatId, `✅ Sorted! Your payment is confirmed and I've just credited <b>${formatNgn(num(p.amount))}</b> to your wallet. Reopen the app to see it. 🎉`, backToMenu());
+      return;
+    }
+  } catch (e) {
+    console.error("[bot] deposit query failed:", e);
+  }
+  const id = await escalateTicket("deposit", chatId, uname, cleaned, `Deposit of ${formatNgn(num(p.amount))} is still <b>${p.status}</b> — gateway hasn't confirmed. Please verify and reply done.`);
+  await tgSend(chatId, `I checked and the gateway hasn't confirmed this <b>${formatNgn(num(p.amount))}</b> deposit yet. I've opened <b>ticket #T${id}</b> — our team will verify and I'll message you here once it's credited.`, backToMenu());
+}
+
+// Try to auto-fix a withdrawal by reference; escalate if still processing.
+async function botHandleWithdrawal(chatId: string, uname: string, ref: string): Promise<void> {
+  await setBotState(chatId, "idle");
+  const cleaned = ref.replace(/\s+/g, "").trim();
+  const [p] = await sql`SELECT * FROM payouts WHERE reference = ${cleaned}`;
+  if (!p) {
+    const id = await escalateTicket("withdrawal", chatId, uname, cleaned, "No matching payout found for this reference — user says they haven't received it.");
+    await tgSend(chatId, `I couldn't find a withdrawal with reference <code>${cleaned}</code>. I've opened <b>ticket #T${id}</b> and our payments team will check it. You'll hear back here.`, backToMenu());
+    return;
+  }
+  if (p.status === "PAID") {
+    await tgSend(chatId, `✅ This withdrawal of <b>${formatNgn(num(p.amount))}</b> is marked <b>PAID</b> on our side to ${p.bank_name} (${p.account_number}). If your bank hasn't shown it, it usually lands within a few minutes.`, backToMenu());
+    return;
+  }
+  if (p.status === "REJECTED") {
+    await tgSend(chatId, `This withdrawal was declined and the <b>${formatNgn(num(p.amount))}</b> was refunded back to your wallet. You can try again from the app.`, backToMenu());
+    return;
+  }
+  // SENT/PENDING → re-query the relay and settle (never re-sends money).
+  try {
+    const r = await settlePayout(cleaned);
+    if (r.status === "paid") {
+      await tgSend(chatId, `✅ Sorted! Your <b>${formatNgn(num(p.amount))}</b> withdrawal is confirmed <b>PAID</b> to ${p.bank_name} (${p.account_number}). 🎉`, backToMenu());
+      return;
+    }
+    if (r.status === "failed") {
+      await tgSend(chatId, `This transfer failed and the <b>${formatNgn(num(p.amount))}</b> has been refunded to your wallet. You can request it again.`, backToMenu());
+      return;
+    }
+  } catch (e) {
+    console.error("[bot] payout settle failed:", e);
+  }
+  const id = await escalateTicket("withdrawal", chatId, uname, cleaned, `Payout of ${formatNgn(num(p.amount))} to ${p.bank_name} (${p.account_number}) is still <b>${p.status}</b>. Please verify with NEKpay and reply done once paid.`);
+  await tgSend(chatId, `Your <b>${formatNgn(num(p.amount))}</b> withdrawal is still processing. I've opened <b>ticket #T${id}</b> and escalated it to our payments team — I'll message you here the moment it's paid.`, backToMenu());
+}
+
+// Apply the real in-app effect when staff resolve a ticket (trusted ops action).
+async function applyTicketResolution(t: any): Promise<void> {
+  try {
+    if (t.kind === "deposit" && t.reference) {
+      const [p] = await sql`SELECT * FROM payments WHERE reference = ${t.reference} AND purpose = 'fund'`;
+      if (p && p.status !== "paid") await creditDeposit(p.reference); // idempotent credit
+    } else if (t.kind === "withdrawal" && t.reference) {
+      const [p] = await sql`SELECT * FROM payouts WHERE reference = ${t.reference}`;
+      if (p && p.status !== "PAID" && p.status !== "REJECTED") {
+        await sql.begin(async (tx) => {
+          await tx`UPDATE payouts SET status = 'PAID', provider_status = 'support-resolved' WHERE id = ${p.id}`;
+          if (p.tx_id) await tx`UPDATE transactions SET status = 'completed' WHERE id = ${p.tx_id}`;
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[bot] applyTicketResolution failed:", e);
+  }
+}
+
+// A staff message inside the ops group: a reply to a ticket resolves it.
+async function botHandleGroupMessage(msg: any): Promise<void> {
+  const text = String(msg.text || "").trim();
+  if (/^\/id\b/.test(text)) {
+    await tgSend(msg.chat.id, `chat_id: <code>${msg.chat.id}</code>`);
+    return;
+  }
+  const reply = msg.reply_to_message;
+  if (!reply) return; // ignore ordinary group chatter
+  const [t] = await sql`SELECT * FROM support_tickets WHERE group_msg_id = ${reply.message_id}`;
+  if (!t) return;
+  const verdict = text.toLowerCase();
+  const resolved = /(done|success|paid|resolved|settled|credited|fixed|complete)/.test(verdict);
+  if (!resolved) {
+    // Relay staff's note to the user without closing the ticket.
+    if (text) await tgSend(t.chat_id, `📩 <b>Support update</b> on ticket #T${t.id}:\n${text}`);
+    return;
+  }
+  if (t.status === "resolved") {
+    await tgSend(msg.chat.id, `Ticket #T${t.id} is already resolved.`);
+    return;
+  }
+  await sql`UPDATE support_tickets SET status = 'resolved' WHERE id = ${t.id}`;
+  await applyTicketResolution(t);
+  const kindWord = t.kind === "deposit" ? "deposit" : "withdrawal";
+  await tgSend(t.chat_id, `✅ <b>Resolved!</b> Your ${kindWord} issue (ticket #T${t.id}) has been sorted by our team. Please reopen the app to see the update. Thanks for your patience! 🙏`, mainMenu());
+  await tgSend(msg.chat.id, `Ticket #T${t.id} resolved ✅ — user notified.`);
+}
+
+async function botHandleCallback(cq: any): Promise<void> {
+  const chatId = String(cq.message?.chat?.id || "");
+  const data = String(cq.data || "");
+  await tgAnswer(cq.id);
+  if (!chatId) return;
+  if (data === "deposit_issue") {
+    await setBotState(chatId, "await_deposit_ref");
+    await tgSend(chatId, "🆘 <b>Deposit not credited</b>\n\nSend me your <b>deposit reference</b> (it starts with <code>TE…</code> and is shown on the Fund Wallet / Transactions screen). I'll check it live and credit it if it's confirmed.", backToMenu());
+  } else if (data === "withdrawal_issue") {
+    await setBotState(chatId, "await_withdraw_ref");
+    await tgSend(chatId, "💸 <b>Withdrawal not received</b>\n\nSend me your <b>withdrawal reference</b> (it starts with <code>gp_…</code> and is on your Transactions screen). I'll re-check the transfer and confirm its status.", backToMenu());
+  } else if (data === "faq_menu") {
+    await tgEdit(chatId, cq.message.message_id, FAQ_TEXT, [...backToMenu(), ...linkButtons()]);
+  } else if (data === "main_menu") {
+    await setBotState(chatId, "idle");
+    await tgEdit(chatId, cq.message.message_id, "How can I help you today? 👇", mainMenu());
+  }
+}
+
+async function botHandleMessage(msg: any): Promise<void> {
+  const chatId = String(msg.chat?.id || "");
+  if (!chatId) return;
+  const text = String(msg.text || "").trim();
+
+  // Messages inside the ops/support group are handled separately (staff replies).
+  if (ENV.TELEGRAM_SUPPORT_GROUP_ID && chatId === ENV.TELEGRAM_SUPPORT_GROUP_ID) {
+    await botHandleGroupMessage(msg);
+    return;
+  }
+  if (/^\/id\b/.test(text)) {
+    await tgSend(chatId, `chat_id: <code>${chatId}</code>`);
+    return;
+  }
+  if (text === "/start" || text === "/menu" || text === "/help" || text === "/support") {
+    await setBotState(chatId, "idle");
+    const who = msg.from?.first_name ? ` ${msg.from.first_name}` : "";
+    await tgSend(chatId, `👋 Hi${who}! I'm the <b>TaskEarner Support Bot</b>. I can check a stuck deposit or withdrawal and fix it on the spot. What do you need?`, mainMenu());
+    return;
+  }
+  const st = await getBotState(chatId);
+  const uname = msg.from?.username ? "@" + msg.from.username : (msg.from?.first_name || "user");
+  if (st.state === "await_deposit_ref") {
+    await botHandleDeposit(chatId, uname, text);
+    return;
+  }
+  if (st.state === "await_withdraw_ref") {
+    await botHandleWithdrawal(chatId, uname, text);
+    return;
+  }
+  await tgSend(chatId, "Tap a button below and I'll help you out 👇", mainMenu());
+}
+
+// Telegram webhook. Always returns 200 "ok" so Telegram never retry-storms us;
+// all real work happens best-effort inside try/catch.
+async function telegramWebhook(req: ApiRequest): Promise<ApiResponse> {
+  if (!botEnabled()) return textResp("ok", 200);
+  if (ENV.TELEGRAM_WEBHOOK_SECRET) {
+    const got = String(req.headers["x-telegram-bot-api-secret-token"] || "");
+    if (got !== ENV.TELEGRAM_WEBHOOK_SECRET) return textResp("ok", 200); // ignore spoofed calls
+  }
+  const update = (req.body && typeof req.body === "object") ? req.body : {};
+  try {
+    if (update.callback_query) await botHandleCallback(update.callback_query);
+    else if (update.message) await botHandleMessage(update.message);
+  } catch (e) {
+    console.error("[telegram] webhook handler error:", e);
+  }
+  return textResp("ok", 200);
+}
+
+// Admin: register the Telegram webhook and report its status (one-tap setup).
+async function adminTelegramSetup(req: ApiRequest): Promise<ApiResponse> {
+  await requireAdmin(req);
+  if (!botEnabled()) return err("Set TELEGRAM_BOT_TOKEN first");
+  const base = (String(req.body?.url || ENV.APP_PUBLIC_URL || ENV.APP_URL) || "").replace(/\/+$/, "");
+  const hookUrl = `${base}/api/telegram/webhook`;
+  const set = await setWebhook(hookUrl, ENV.TELEGRAM_WEBHOOK_SECRET);
+  const info = await getWebhookInfo();
+  return ok({
+    ok: !!set?.ok,
+    webhookUrl: hookUrl,
+    setResult: set,
+    info: info?.result || info,
+    supportGroup: ENV.TELEGRAM_SUPPORT_GROUP_ID ? "set" : "MISSING",
+  });
+}
+
 // ── Dispatch ────────────────────────────────────────────────────────────────
 
 type Handler = (req: ApiRequest) => Promise<ApiResponse>;
@@ -1111,6 +1360,8 @@ const routes: Record<string, Handler> = {
   "GET /admin/sponsored": adminSponsored,
   "POST /admin/sponsored": adminCreateSponsored,
   "POST /admin/sponsored/action": adminSponsoredAction,
+  "POST /admin/telegram/setup": adminTelegramSetup,
+  "POST /telegram/webhook": telegramWebhook,
 };
 
 export async function handleApi(req: ApiRequest): Promise<ApiResponse> {

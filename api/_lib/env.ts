@@ -35,4 +35,16 @@ export const ENV = {
   // Flutterwave — used only for bank list + account-name resolution.
   FLW_SECRET_KEY: process.env.FLUTTERWAVE_SECRET_KEY || process.env.FLW_SECRET_KEY || "",
   FLW_BASE_URL: process.env.FLW_BASE_URL || "https://api.flutterwave.com",
+
+  // Telegram support bot. TELEGRAM_BOT_TOKEN enables the /telegram/webhook
+  // endpoint; TELEGRAM_SUPPORT_GROUP_ID is the staff/ops group tickets escalate
+  // to; TELEGRAM_WEBHOOK_SECRET (optional) is checked against Telegram's
+  // X-Telegram-Bot-Api-Secret-Token header so only Telegram can call the hook.
+  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || "",
+  TELEGRAM_SUPPORT_GROUP_ID: process.env.TELEGRAM_SUPPORT_GROUP_ID || "",
+  TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET || "",
+  // Public-facing links surfaced in the bot menu.
+  APP_PUBLIC_URL: process.env.APP_PUBLIC_URL || "https://taskearner.site",
+  TELEGRAM_CHANNEL_URL: process.env.TELEGRAM_CHANNEL_URL || "https://t.me/taskearning101",
+  TELEGRAM_GROUP_URL: process.env.TELEGRAM_GROUP_URL || "https://t.me/+ABIZY4MltSdmNzI5",
 };

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, ArrowLeftRight, Banknote, ListChecks, Megaphone,
-  Loader2, Plus, Check, X, Power, Trash2, RefreshCw, Wallet, Copy,
+  Loader2, Plus, Check, X, Power, Trash2, RefreshCw, Wallet, Copy, Bot,
 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -125,6 +125,51 @@ function Overview() {
           </div>
         ))}
       </div>
+
+      <SupportBotCard />
+    </div>
+  );
+}
+
+// One-tap: register the Telegram support-bot webhook with Telegram and show its
+// live status (so setup doesn't require the terminal).
+function SupportBotCard() {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [info, setInfo] = useState<string>("");
+  const setup = async () => {
+    setBusy(true);
+    try {
+      const r: any = await api.adminTelegramSetup();
+      const wh = r?.info?.url || r?.webhookUrl || "";
+      const pending = r?.info?.pending_update_count;
+      const lastErr = r?.info?.last_error_message;
+      setInfo([
+        `webhook: ${wh || "—"}`,
+        `support group: ${r?.supportGroup}`,
+        pending != null ? `pending: ${pending}` : "",
+        lastErr ? `last error: ${lastErr}` : "",
+      ].filter(Boolean).join("\n"));
+      toast(r?.ok ? "Support bot connected ✅" : "Set — check status below", r?.ok ? "success" : "info");
+    } catch (e: any) {
+      toast(e?.message || "Setup failed", "error");
+      setInfo(e?.message || "Setup failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="card p-4">
+      <div className="flex items-center justify-between">
+        <p className="flex items-center gap-2 font-bold"><Bot className="h-5 w-5 text-brand-600" /> Telegram support bot</p>
+        <button onClick={setup} disabled={busy} className="btn-primary px-4 py-2 text-sm disabled:opacity-60">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Connect webhook"}
+        </button>
+      </div>
+      <p className="mt-1 text-xs text-slate-400">
+        Set <span className="font-mono">TELEGRAM_BOT_TOKEN</span> &amp; <span className="font-mono">TELEGRAM_SUPPORT_GROUP_ID</span> in Vercel, then tap Connect. Add the bot to your ops group and send <span className="font-mono">/id</span> there to get the group id.
+      </p>
+      {info && <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-xl bg-slate-100 p-2 text-[11px] text-slate-600 dark:bg-white/5 dark:text-slate-300">{info}</pre>}
     </div>
   );
 }
