@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowUp, Landmark, Plus, Clock, Building2, Check, Loader2 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Sheet } from "@/components/ui/Sheet";
+import { api } from "@/lib/api";
 import { useStore, WithdrawReceipt as Receipt } from "@/store/useStore";
 import { SALES_WITHDRAW_MIN, planById, withdrawFee, withdrawNet, WITHDRAW_TAX_RATE, WITHDRAW_VAT } from "@/lib/data";
 import { WithdrawReceipt } from "@/components/WithdrawReceipt";
@@ -189,25 +190,55 @@ export default function WalletPage() {
         </div>
       )}
 
-      <BankSheet open={bankSheet} onClose={() => setBankSheet(false)} onSave={async (b) => { const r = await addBank(b); toast(r.msg, r.ok ? "success" : "error"); if (r.ok) setBankSheet(false); }} banks={BANKS} />
+      <BankSheet open={bankSheet} onClose={() => setBankSheet(false)} onSave={async (b) => { const r = await addBank(b); toast(r.msg, r.ok ? "success" : "error"); if (r.ok) setBankSheet(false); }} fallbackBanks={BANKS} />
       {receipt && <WithdrawReceipt receipt={receipt} onClose={() => setReceipt(null)} />}
     </Layout>
   );
 }
 
-function BankSheet({ open, onClose, onSave, banks }: { open: boolean; onClose: () => void; onSave: (b: { bankName: string; accountNumber: string; accountName: string }) => void; banks: string[] }) {
+function BankSheet({ open, onClose, onSave, fallbackBanks }: { open: boolean; onClose: () => void; onSave: (b: { bankName: string; accountNumber: string; accountName: string }) => void; fallbackBanks: string[] }) {
   const toast = useToast();
-  const [bankName, setBankName] = useState(banks[0]);
+  const [banks, setBanks] = useState<{ code: string; name: string }[]>([]);
+  const [bankName, setBankName] = useState("");
   const [acct, setAcct] = useState("");
   const [name, setName] = useState("");
+  const [resolving, setResolving] = useState(false);
+  const [verified, setVerified] = useState(false);
 
+  const bankCode = banks.find((b) => b.name === bankName)?.code || "";
   const acctError = acct.length > 0 && acct.length !== 10;
 
+  // Load the bank list once the sheet opens.
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    api.banksList()
+      .then((r) => { if (alive && r.banks.length) { setBanks(r.banks); setBankName((n) => n || r.banks[0].name); } })
+      .catch(() => { /* fall back to the bundled names below */ });
+    return () => { alive = false; };
+  }, [open]);
+
+  // Auto-resolve the account name when a bank + 10-digit number are entered.
+  useEffect(() => {
+    setName(""); setVerified(false);
+    if (acct.length !== 10 || !bankCode) return;
+    let alive = true;
+    setResolving(true);
+    api.resolveBankName({ bankCode, accountNumber: acct })
+      .then((r) => { if (alive) { setName(r.accountName); setVerified(true); } })
+      .catch((e: any) => { if (alive) { setName(""); setVerified(false); toast(e?.message || "Couldn't verify account", "error"); } })
+      .finally(() => { if (alive) setResolving(false); });
+    return () => { alive = false; };
+  }, [acct, bankCode]);
+
   const submit = () => {
+    if (!bankName) return toast("Select your bank", "error");
     if (acct.length !== 10) return toast("Account number must be exactly 10 digits", "error");
-    if (!name.trim()) return toast("Enter the account name", "error");
+    if (!name.trim()) return toast("Enter your account number to verify the name", "error");
     onSave({ bankName, accountNumber: acct, accountName: name.trim() });
   };
+
+  const bankNames = banks.length ? banks.map((b) => b.name) : fallbackBanks;
 
   return (
     <Sheet open={open} onClose={onClose} title="Add bank account">
@@ -215,7 +246,8 @@ function BankSheet({ open, onClose, onSave, banks }: { open: boolean; onClose: (
         <label className="block">
           <span className="mb-1.5 block text-sm font-semibold text-slate-500">Bank</span>
           <select value={bankName} onChange={(e) => setBankName(e.target.value)} className="input">
-            {banks.map((b) => <option key={b}>{b}</option>)}
+            {!bankName && <option value="">Select bank…</option>}
+            {bankNames.map((b) => <option key={b} value={b}>{b}</option>)}
           </select>
         </label>
         <label className="block">
@@ -233,13 +265,27 @@ function BankSheet({ open, onClose, onSave, banks }: { open: boolean; onClose: (
           />
           {acctError && <span className="mt-1 block text-xs font-medium text-rose-500">Nigerian account numbers are 10 digits.</span>}
         </label>
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-semibold text-slate-500">Account name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} className="input" placeholder="Amara Okeke" />
-        </label>
-        <button onClick={submit} className="btn-primary w-full py-4">
-          Save bank account
+
+        {/* auto-resolved account name */}
+        {(resolving || name) && (
+          <div className={cn("rounded-2xl p-4", verified ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-slate-100 dark:bg-white/5")}>
+            {resolving ? (
+              <p className="flex items-center gap-2 text-sm font-semibold text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Verifying account…</p>
+            ) : (
+              <>
+                <p className="text-xs font-semibold text-slate-400">Account name</p>
+                <p className="flex items-center gap-1.5 font-display text-lg font-extrabold text-emerald-700 dark:text-emerald-300">
+                  <Check className="h-4 w-4" /> {name}
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        <button onClick={submit} disabled={resolving || !verified} className="btn-primary w-full py-4">
+          {resolving ? <Loader2 className="h-5 w-5 animate-spin" /> : "Save bank account"}
         </button>
+        <p className="text-center text-xs text-slate-400">The account name is verified automatically — no manual entry.</p>
       </div>
     </Sheet>
   );

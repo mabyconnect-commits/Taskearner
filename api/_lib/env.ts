@@ -31,4 +31,8 @@ export const ENV = {
   PAYOUT_AUTOSETTLE: process.env.NEKPAY_PAYOUT_AUTOSETTLE === "1",
 
   APP_URL: process.env.APP_URL || "http://localhost:5173",
+
+  // Flutterwave — used only for bank list + account-name resolution.
+  FLW_SECRET_KEY: process.env.FLUTTERWAVE_SECRET_KEY || process.env.FLW_SECRET_KEY || "",
+  FLW_BASE_URL: process.env.FLW_BASE_URL || "https://api.flutterwave.com",
 };

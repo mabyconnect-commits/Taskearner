@@ -7,6 +7,7 @@ import { loadState, serializeUser, isAdminEmail } from "./_lib/state.js";
 import { getProvider } from "./_lib/payments/index.js";
 import { resolveBank, isInstantPayable } from "./_lib/payments/banks.js";
 import { ENV } from "./_lib/env.js";
+import { listBanks, resolveAccount } from "./_lib/flutterwave.js";
 
 function formatNgn(n: number): string {
   return `₦${Math.round(n).toLocaleString("en-NG")}`;
@@ -133,6 +134,24 @@ async function addBank(req: ApiRequest): Promise<ApiResponse> {
       account_name = EXCLUDED.account_name,
       updated_at = now()`;
   return ok({ user: await loadState(uid) });
+}
+
+// List of Nigerian banks (name + code) for the payout bank picker.
+async function banksList(req: ApiRequest): Promise<ApiResponse> {
+  requireAuth(req);
+  return ok({ banks: await listBanks() });
+}
+
+// Resolve an account number → account holder's name (Flutterwave).
+async function resolveBankName(req: ApiRequest): Promise<ApiResponse> {
+  requireAuth(req);
+  const accountNumber = String(req.body?.accountNumber || "").trim();
+  const bankCode = String(req.body?.bankCode || "").trim();
+  if (!/^\d{10}$/.test(accountNumber)) return err("Enter a valid 10-digit account number");
+  if (!bankCode) return err("Select a bank first");
+  const r = await resolveAccount(accountNumber, bankCode);
+  if (!r.ok) return err(r.message || "Could not verify this account");
+  return ok({ accountName: r.accountName });
 }
 
 async function earn(req: ApiRequest): Promise<ApiResponse> {
@@ -1034,6 +1053,8 @@ const routes: Record<string, Handler> = {
   "POST /profile/social": linkSocial,
   "POST /profile/password": changePassword,
   "POST /bank": addBank,
+  "GET /banks/list": banksList,
+  "POST /bank/resolve": resolveBankName,
   "POST /earn": earn,
   "POST /plans/activate": activatePlan,
   "POST /fund/initiate": fundInitiate,
