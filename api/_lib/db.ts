@@ -67,11 +67,14 @@ export async function ensureSchema(): Promise<void> {
       CREATE TABLE IF NOT EXISTS banks (
         user_id        uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
         bank_name      text NOT NULL,
+        bank_code      text NOT NULL DEFAULT '',
         account_number text NOT NULL,
         account_name   text NOT NULL,
         updated_at     timestamptz NOT NULL DEFAULT now()
       );
     `;
+    // Paystack/Flutterwave bank code, used to derive the NEKpay payout code.
+    await sql`ALTER TABLE banks ADD COLUMN IF NOT EXISTS bank_code text NOT NULL DEFAULT ''`;
     await sql`
       CREATE TABLE IF NOT EXISTS transactions (
         id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),

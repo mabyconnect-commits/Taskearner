@@ -31,6 +31,7 @@ export interface Transaction {
 }
 export interface Bank {
   bankName: string;
+  bankCode?: string;
   accountNumber: string;
   accountName: string;
 }

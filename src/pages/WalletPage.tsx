@@ -196,7 +196,7 @@ export default function WalletPage() {
   );
 }
 
-function BankSheet({ open, onClose, onSave, fallbackBanks }: { open: boolean; onClose: () => void; onSave: (b: { bankName: string; accountNumber: string; accountName: string }) => void; fallbackBanks: string[] }) {
+function BankSheet({ open, onClose, onSave, fallbackBanks }: { open: boolean; onClose: () => void; onSave: (b: { bankName: string; bankCode: string; accountNumber: string; accountName: string }) => void; fallbackBanks: string[] }) {
   const toast = useToast();
   const [banks, setBanks] = useState<{ code: string; name: string }[]>([]);
   const [bankName, setBankName] = useState("");
@@ -235,7 +235,7 @@ function BankSheet({ open, onClose, onSave, fallbackBanks }: { open: boolean; on
     if (!bankName) return toast("Select your bank", "error");
     if (acct.length !== 10) return toast("Account number must be exactly 10 digits", "error");
     if (!name.trim()) return toast("Enter your account number to verify the name", "error");
-    onSave({ bankName, accountNumber: acct, accountName: name.trim() });
+    onSave({ bankName, bankCode, accountNumber: acct, accountName: name.trim() });
   };
 
   const bankNames = banks.length ? banks.map((b) => b.name) : fallbackBanks;

@@ -5,7 +5,7 @@ import { comparePassword, hashPassword, requireAuth, signToken } from "./_lib/au
 import { PLANS, planOf, SALES_WITHDRAW_MIN, COOLDOWN_MS, WORD_ROUNDS, dailyMax, utcDay, depositTax, depositTotal, withdrawFee, withdrawNet } from "./_lib/plans.js";
 import { loadState, serializeUser, isAdminEmail } from "./_lib/state.js";
 import { getProvider } from "./_lib/payments/index.js";
-import { resolveBank, isInstantPayable } from "./_lib/payments/banks.js";
+import { nekpayBankCode } from "./_lib/payments/banks.js";
 import { ENV } from "./_lib/env.js";
 import { listBanks, resolveAccount } from "./_lib/flutterwave.js";
 
@@ -122,14 +122,15 @@ async function linkSocial(req: ApiRequest): Promise<ApiResponse> {
 
 async function addBank(req: ApiRequest): Promise<ApiResponse> {
   const uid = requireAuth(req);
-  const { bankName, accountNumber, accountName } = req.body || {};
+  const { bankName, bankCode, accountNumber, accountName } = req.body || {};
   if (!bankName || !/^\d{10}$/.test(String(accountNumber || "")) || !accountName?.trim())
     return err("Provide a bank, a 10-digit account number and account name");
   await sql`
-    INSERT INTO banks (user_id, bank_name, account_number, account_name)
-    VALUES (${uid}, ${bankName}, ${accountNumber}, ${accountName.trim()})
+    INSERT INTO banks (user_id, bank_name, bank_code, account_number, account_name)
+    VALUES (${uid}, ${bankName}, ${String(bankCode || "")}, ${accountNumber}, ${accountName.trim()})
     ON CONFLICT (user_id) DO UPDATE SET
       bank_name = EXCLUDED.bank_name,
+      bank_code = EXCLUDED.bank_code,
       account_number = EXCLUDED.account_number,
       account_name = EXCLUDED.account_name,
       updated_at = now()`;
@@ -439,7 +440,9 @@ async function withdraw(req: ApiRequest): Promise<ApiResponse> {
 
   const provider = getProvider();
   const transferId = genTransferId(uid);
-  const bankEntry = resolveBank(bank.bank_name);
+  // Real NEKpay payout bank_code (NGR + Paystack code). null → NEKpay can't pay
+  // this bank (e.g. Moniepoint/FairMoney/Carbon) → route to the manual queue.
+  const nekCode = nekpayBankCode(bank.bank_name, bank.bank_code);
 
   // Receipt shown to the user after the request is submitted.
   const receiptBase = {
@@ -475,7 +478,7 @@ async function withdraw(req: ApiRequest): Promise<ApiResponse> {
   });
 
   const relayReady = provider.name === "mock" || (!!ENV.NEKPAY_RELAY_URL && !!ENV.NEKPAY_RELAY_SECRET);
-  const autoPayable = isInstantPayable(bank.bank_name) && amount <= ENV.NAIRA_AUTO_MAX_NGN && relayReady;
+  const autoPayable = nekCode !== null && amount <= ENV.NAIRA_AUTO_MAX_NGN && relayReady;
 
   if (!autoPayable) {
     // Manual queue (unsupported bank, over ceiling, or relay not configured). Funds reserved.
@@ -490,7 +493,7 @@ async function withdraw(req: ApiRequest): Promise<ApiResponse> {
     transferId,
     amount: net, // the bank receives the net amount after tax + VAT
     bankName: bank.bank_name,
-    bankCode: bankEntry?.code || "",
+    bankCode: nekCode || "",
     accountNumber: bank.account_number,
     accountName: bank.account_name,
     backUrl: `${ENV.APP_URL}/api/withdrawals/naira/callback`,
@@ -911,13 +914,14 @@ async function adminPayoutAction(req: ApiRequest): Promise<ApiResponse> {
   } else if (action === "retry") {
     // Re-dispatch the transfer to the gateway (for a stuck PENDING/SENT payout).
     const provider = getProvider();
-    const bankEntry = resolveBank(p.bank_name);
+    const nekCode = nekpayBankCode(p.bank_name);
+    if (!nekCode) return err("NEKpay can't auto-pay this bank — settle it manually.");
     const net = withdrawNet(num(p.amount));
     const res = await provider.payout({
       transferId: p.reference,
       amount: net,
       bankName: p.bank_name,
-      bankCode: bankEntry?.code || "",
+      bankCode: nekCode,
       accountNumber: p.account_number,
       accountName: p.account_name,
       backUrl: `${ENV.APP_URL}/api/withdrawals/naira/callback`,
