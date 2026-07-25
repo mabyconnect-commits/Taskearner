@@ -16,8 +16,11 @@ const iconFor = (c: string) =>
 export default function Tasks() {
   const nav = useNavigate();
   const toast = useToast();
-  const { plan, completedTasks, earnActivity, mode } = useStore();
+  const { plan, completedTasks, earnActivity, mode, dailyUsed } = useStore();
   const p = planById(plan);
+  const taskCap = p.daily.task;
+  const taskUsed = Math.min(dailyUsed?.task ?? 0, taskCap);
+  const capReached = taskUsed >= taskCap;
   const [busy, setBusy] = useState<string | null>(null);
   const [tab, setTab] = useState<"available" | "completed">("available");
   // Live tasks from the DB (admin-managed); fall back to bundled list offline.
@@ -35,7 +38,7 @@ export default function Tasks() {
   if (plan === "free") return <Locked nav={nav} />;
 
   const doTask = (t: DailyTask) => {
-    if (completedTasks.includes(t.id) || busy) return;
+    if (completedTasks.includes(t.id) || busy || capReached) return;
     setBusy(t.id);
     setTimeout(async () => {
       const res = await earnActivity("task", t.id);
@@ -61,14 +64,16 @@ export default function Tasks() {
               cx="50" cy="50" r="44"
               className="fill-none stroke-brand-500" strokeWidth="10" strokeLinecap="round"
               strokeDasharray={2 * Math.PI * 44}
-              strokeDashoffset={2 * Math.PI * 44 * (1 - done / (tasks.length || 1))}
+              strokeDashoffset={2 * Math.PI * 44 * (1 - taskUsed / (taskCap || 1))}
             />
           </svg>
-          <span className="font-display text-sm font-extrabold">{done}/{tasks.length}</span>
+          <span className="font-display text-sm font-extrabold">{taskUsed}/{taskCap}</span>
         </div>
         <div>
           <p className="font-display text-lg font-bold">Today's progress</p>
-          <p className="text-sm text-slate-400">Complete all tasks to max out your daily earnings.</p>
+          <p className="text-sm text-slate-400">
+            {capReached ? "You've done today's task. Come back tomorrow!" : `You can do ${taskCap - taskUsed} task${taskCap - taskUsed > 1 ? "s" : ""} today.`}
+          </p>
         </div>
       </div>
 
@@ -119,6 +124,8 @@ export default function Tasks() {
               </div>
               {isDone ? (
                 <span className="text-sm font-bold text-emerald-600">+{formatNaira(p.perTask, false)}</span>
+              ) : capReached ? (
+                <span className="shrink-0 text-xs font-bold text-slate-400">Done for today</span>
               ) : (
                 <button
                   onClick={() => doTask(t)}

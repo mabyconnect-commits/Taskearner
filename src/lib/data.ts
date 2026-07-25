@@ -1,6 +1,6 @@
 export type PlanId = "free" | "lite" | "starter" | "pro" | "elite" | "prime";
 
-export const WORD_ROUNDS = 2;
+export const WORD_ROUNDS = 1;
 
 export interface DailyCaps {
   voice: number;
@@ -38,7 +38,7 @@ export const PLANS: Plan[] = [
     perWord: 60,
     perPost: 50,
     perTask: 30,
-    daily: { voice: 1, word: 1, task: 5, post: 3 },
+    daily: { voice: 1, word: 1, task: 1, post: 1 },
     minWithdraw: 8000,
     tagline: "Dip your toes in and start earning.",
   },
@@ -51,7 +51,7 @@ export const PLANS: Plan[] = [
     perWord: 140,
     perPost: 110,
     perTask: 60,
-    daily: { voice: 1, word: 1, task: 8, post: 4 },
+    daily: { voice: 1, word: 1, task: 1, post: 1 },
     minWithdraw: 14500,
     tagline: "A solid step up for daily earners.",
   },
@@ -64,7 +64,7 @@ export const PLANS: Plan[] = [
     perWord: 240,
     perPost: 180,
     perTask: 100,
-    daily: { voice: 1, word: 2, task: 12, post: 6 },
+    daily: { voice: 1, word: 1, task: 1, post: 1 },
     minWithdraw: 22000,
     tagline: "For creators who show up every day.",
     popular: true,
@@ -78,7 +78,7 @@ export const PLANS: Plan[] = [
     perWord: 320,
     perPost: 210,
     perTask: 130,
-    daily: { voice: 1, word: 2, task: 18, post: 8 },
+    daily: { voice: 1, word: 1, task: 1, post: 1 },
     minWithdraw: 34000,
     tagline: "Premium rates, faster payouts.",
   },
@@ -91,7 +91,7 @@ export const PLANS: Plan[] = [
     perWord: 400,
     perPost: 250,
     perTask: 150,
-    daily: { voice: 1, word: 2, task: 26, post: 21 },
+    daily: { voice: 1, word: 1, task: 1, post: 1 },
     minWithdraw: 45000,
     tagline: "The highest earning tier. Pay once, earn forever.",
   },

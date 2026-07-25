@@ -138,88 +138,89 @@ async function addBank(req: ApiRequest): Promise<ApiResponse> {
 async function earn(req: ApiRequest): Promise<ApiResponse> {
   const uid = requireAuth(req);
   const { kind, refId } = req.body || {};
-  const [u] = await sql`SELECT * FROM users WHERE id = ${uid}`;
-  if (!u) return err("User not found", 404);
-  if (u.plan === "free") return err("Activate a plan to start earning", 403);
-  const plan = planOf(u.plan);
+  const kindKey = kind as "voice" | "word" | "task" | "post";
 
-  const now = Date.now();
-  const cooldowns: Record<string, number> = u.cooldowns ?? {};
-  const completed = u.completed ?? { tasks: [], posts: [] };
+  // Everything runs inside one transaction with the user row LOCKED (FOR UPDATE)
+  // so two concurrent requests can't both pass the daily cap and double-earn.
+  const amount = await sql.begin(async (tx) => {
+    const [u] = await tx`SELECT * FROM users WHERE id = ${uid} FOR UPDATE`;
+    if (!u) throw new HttpError("User not found", 404);
+    if (u.plan === "free") throw new HttpError("Activate a plan to start earning", 403);
+    const plan = planOf(u.plan);
 
-  // Daily usage: reset when the UTC day changes.
-  const today = utcDay();
-  const rawDaily = u.daily ?? {};
-  const daily: { date: string; earned: number; voice: number; word: number; task: number; post: number } =
-    rawDaily.date === today
+    const now = Date.now();
+    const cooldowns: Record<string, number> = u.cooldowns ?? {};
+    const completed = u.completed ?? { tasks: [], posts: [] };
+
+    // Daily usage: reset when the UTC day changes.
+    const today = utcDay();
+    const rawDaily = u.daily ?? {};
+    const daily = rawDaily.date === today
       ? { date: today, earned: num(rawDaily.earned), voice: rawDaily.voice ?? 0, word: rawDaily.word ?? 0, task: rawDaily.task ?? 0, post: rawDaily.post ?? 0 }
       : { date: today, earned: 0, voice: 0, word: 0, task: 0, post: 0 };
 
-  const capFor = (k: "voice" | "word" | "task" | "post") => plan.daily[k];
-  const usedFor = (k: "voice" | "word" | "task" | "post") => daily[k];
+    const capFor = (k: "voice" | "word" | "task" | "post") => plan.daily[k];
+    const usedFor = (k: "voice" | "word" | "task" | "post") => daily[k];
 
-  let amount = 0;
-  let title = "";
-  const type = kind;
-  const kindKey = kind as "voice" | "word" | "task" | "post";
+    let amt = 0;
+    let title = "";
 
-  if (kind === "voice") {
-    if ((cooldowns.voice ?? 0) > now) return err("This activity is cooling down", 429);
-    if (usedFor("voice") >= capFor("voice")) return err("You've completed today's Voice Earn. Come back tomorrow!", 429);
-    amount = plan.perVoice; title = "Voice Earn session completed";
-    cooldowns.voice = now + COOLDOWN_MS;
-  } else if (kind === "word") {
-    if ((cooldowns.word ?? 0) > now) return err("This activity is cooling down", 429);
-    if (usedFor("word") >= capFor("word")) return err("You've hit today's Word Game limit. Come back tomorrow!", 429);
-    const count = Math.max(1, Math.min(WORD_ROUNDS, Math.floor(Number(req.body?.count) || 1)));
-    amount = plan.perWord * count; title = "Word Game completed";
-    cooldowns.word = now + COOLDOWN_MS;
-  } else if (kind === "task") {
-    if (!refId) return err("Missing task id");
-    if (completed.tasks.includes(refId)) return err("Task already completed", 409);
-    if (usedFor("task") >= capFor("task")) return err("You've reached today's task limit for your plan.", 429);
-    const [t] = await sql`SELECT id FROM tasks WHERE id = ${refId} AND active = true`;
-    if (!t) return err("This task is no longer available", 404);
-    amount = plan.perTask; title = "Daily task completed";
-    completed.tasks = [...completed.tasks, refId];
-  } else if (kind === "post") {
-    if (!refId) return err("Missing post id");
-    if (completed.posts.includes(refId)) return err("Post already shared", 409);
-    if (usedFor("post") >= capFor("post")) return err("You've reached today's sponsored-post limit for your plan.", 429);
-    const [sp] = await sql`SELECT * FROM sponsored WHERE id = ${refId} AND status = 'active'`;
-    if (!sp) return err("This post is no longer available", 404);
-    if (num(sp.budget) > 0 && num(sp.spent) + plan.perPost > num(sp.budget)) return err("This campaign has ended", 409);
-    amount = plan.perPost; title = "Sponsored post shared";
-    completed.posts = [...completed.posts, refId];
-  } else {
-    return err("Unknown activity");
-  }
+    if (kind === "voice") {
+      if ((cooldowns.voice ?? 0) > now) throw new HttpError("This activity is cooling down", 429);
+      if (usedFor("voice") >= capFor("voice")) throw new HttpError("You've completed today's Voice Earn. Come back tomorrow!", 429);
+      amt = plan.perVoice; title = "Voice Earn session completed";
+      cooldowns.voice = now + COOLDOWN_MS;
+    } else if (kind === "word") {
+      if ((cooldowns.word ?? 0) > now) throw new HttpError("This activity is cooling down", 429);
+      if (usedFor("word") >= capFor("word")) throw new HttpError("You've hit today's Word Game limit. Come back tomorrow!", 429);
+      const count = Math.max(1, Math.min(WORD_ROUNDS, Math.floor(Number(req.body?.count) || 1)));
+      amt = plan.perWord * count; title = "Word Game completed";
+      cooldowns.word = now + COOLDOWN_MS;
+    } else if (kind === "task") {
+      if (!refId) throw new HttpError("Missing task id", 400);
+      if (completed.tasks.includes(refId)) throw new HttpError("Task already completed", 409);
+      if (usedFor("task") >= capFor("task")) throw new HttpError("You've reached today's task limit for your plan.", 429);
+      const [t] = await tx`SELECT id FROM tasks WHERE id = ${refId} AND active = true`;
+      if (!t) throw new HttpError("This task is no longer available", 404);
+      amt = plan.perTask; title = "Daily task completed";
+      completed.tasks = [...completed.tasks, refId];
+    } else if (kind === "post") {
+      if (!refId) throw new HttpError("Missing post id", 400);
+      if (completed.posts.includes(refId)) throw new HttpError("Post already shared", 409);
+      if (usedFor("post") >= capFor("post")) throw new HttpError("You've reached today's sponsored-post limit for your plan.", 429);
+      const [sp] = await tx`SELECT * FROM sponsored WHERE id = ${refId} AND status = 'active' FOR UPDATE`;
+      if (!sp) throw new HttpError("This post is no longer available", 404);
+      if (num(sp.budget) > 0 && num(sp.spent) + plan.perPost > num(sp.budget)) throw new HttpError("This campaign has ended", 409);
+      amt = plan.perPost; title = "Sponsored post shared";
+      completed.posts = [...completed.posts, refId];
+    } else {
+      throw new HttpError("Unknown activity", 400);
+    }
 
-  // Enforce the plan's daily earning ceiling — never pay beyond expected funds.
-  const ceiling = dailyMax(plan);
-  const remaining = Math.max(0, ceiling - daily.earned);
-  if (remaining <= 0) return err("You've reached today's earning limit for your plan.", 429);
-  amount = Math.min(amount, remaining);
+    // Enforce the plan's daily earning ceiling — never pay beyond expected funds.
+    const ceiling = dailyMax(plan);
+    const remaining = Math.max(0, ceiling - daily.earned);
+    if (remaining <= 0) throw new HttpError("You've reached today's earning limit for your plan.", 429);
+    amt = Math.min(amt, remaining);
 
-  daily.earned += amount;
-  daily[kindKey] += 1;
+    daily.earned += amt;
+    daily[kindKey] += 1;
 
-  await sql.begin(async (tx) => {
     await tx`
-      UPDATE users SET engagement = engagement + ${amount},
+      UPDATE users SET engagement = engagement + ${amt},
         cooldowns = ${tx.json(cooldowns)}, completed = ${tx.json(completed)}, daily = ${tx.json(daily)}
       WHERE id = ${uid}`;
     await tx`
       INSERT INTO transactions (user_id, type, title, amount, wallet)
-      VALUES (${uid}, ${type}, ${title}, ${amount}, 'engagement')`;
+      VALUES (${uid}, ${kind}, ${title}, ${amt}, 'engagement')`;
     if (kind === "post" && refId) {
-      // consume the advertiser's budget; end the campaign when exhausted
       await tx`
         UPDATE sponsored
-        SET spent = spent + ${amount},
-            status = CASE WHEN budget > 0 AND spent + ${amount} >= budget THEN 'ended' ELSE status END
+        SET spent = spent + ${amt},
+            status = CASE WHEN budget > 0 AND spent + ${amt} >= budget THEN 'ended' ELSE status END
         WHERE id = ${refId}`;
     }
+    return amt;
   });
 
   return ok({ amount, user: await loadState(uid), transactions: await txList(uid) });
@@ -435,10 +436,14 @@ async function withdraw(req: ApiRequest): Promise<ApiResponse> {
   };
   const receipt = (status: string) => ({ ...receiptBase, status });
 
-  // Reserve funds up front (debit + PENDING payout + pending ledger row), atomic
+  // Reserve funds up front (debit + PENDING payout + pending ledger row), atomic.
+  // The debit is conditional on sufficient balance so two concurrent withdrawals
+  // can never overdraw / double-spend the same funds.
   const reserved = await sql.begin(async (tx) => {
-    if (walletKind === "sales") await tx`UPDATE users SET sales = sales - ${amount} WHERE id = ${uid}`;
-    else await tx`UPDATE users SET engagement = engagement - ${amount} WHERE id = ${uid}`;
+    const debited = walletKind === "sales"
+      ? await tx`UPDATE users SET sales = sales - ${amount} WHERE id = ${uid} AND sales >= ${amount} RETURNING id`
+      : await tx`UPDATE users SET engagement = engagement - ${amount} WHERE id = ${uid} AND engagement >= ${amount} RETURNING id`;
+    if (debited.length === 0) throw new HttpError("Insufficient balance in this wallet", 400);
     const [txn] = await tx`
       INSERT INTO transactions (user_id, type, title, amount, wallet, status)
       VALUES (${uid}, 'withdraw', ${`Withdrawal to ${bank.bank_name} · ${formatNgn(net)} net (${formatNgn(fee)} fee)`}, ${-amount}, ${walletKind}, 'pending')

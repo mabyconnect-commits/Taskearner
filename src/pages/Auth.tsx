@@ -99,7 +99,7 @@ export default function Auth() {
       </p>
 
       <p className="mt-auto pt-8 text-center text-xs text-slate-400">
-        Demo app · This is a UI prototype. No real payments are processed.
+        By continuing you agree to Task Earner Africa's Terms & Privacy Policy.
       </p>
     </div>
   );

@@ -16,8 +16,10 @@ const PLATFORMS = ["WhatsApp", "Facebook", "X", "Instagram", "TikTok"] as const;
 export default function Sponsored() {
   const nav = useNavigate();
   const toast = useToast();
-  const { plan, socialLinked, earnActivity, completedPosts, mode, deposit, advertisePost } = useStore();
+  const { plan, socialLinked, earnActivity, completedPosts, mode, deposit, advertisePost, dailyUsed } = useStore();
   const p = planById(plan);
+  const postCap = p.daily.post;
+  const postCapReached = (dailyUsed?.post ?? 0) >= postCap;
   const [posts, setPosts] = useState<SponsoredPost[]>(SPONSORED_POSTS);
   const [shared, setShared] = useState<string[]>(completedPosts);
   const [busy, setBusy] = useState<string | null>(null);
@@ -43,7 +45,7 @@ export default function Sponsored() {
   };
 
   const share = (post: SponsoredPost) => {
-    if (shared.includes(post.id) || busy) return;
+    if (shared.includes(post.id) || busy || postCapReached) return;
     setBusy(post.id);
     setTimeout(async () => {
       const res = await earnActivity("post", post.id);
@@ -111,11 +113,11 @@ export default function Sponsored() {
                 </button>
                 <button
                   onClick={() => share(post)}
-                  disabled={isShared || !!busy}
+                  disabled={isShared || !!busy || (postCapReached && !isShared)}
                   className={cn("btn mt-2 w-full py-3.5 text-white", isShared ? "bg-emerald-500" : "btn-primary")}
                 >
                   {busy === post.id ? <Loader2 className="h-4 w-4 animate-spin" /> : isShared ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
-                  {isShared ? "Posted & credited" : "I have performed this post"}
+                  {isShared ? "Posted & credited" : postCapReached ? "Done for today" : "I have performed this post"}
                 </button>
               </div>
             </div>

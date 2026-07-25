@@ -130,7 +130,7 @@ export default function Earn() {
 
       <p className="mt-6 rounded-2xl bg-slate-100 p-4 text-center text-sm text-slate-500 dark:bg-white/5">
         Earnings land in your <span className="font-bold text-brand-600 dark:text-brand-300">Engagement wallet</span> instantly.
-        Cooldowns reset every 60 seconds in this demo.
+        Each activity can be done once per day.
       </p>
     </Layout>
   );
