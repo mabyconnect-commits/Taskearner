@@ -134,7 +134,7 @@ export const api = {
   adminDepositAction: (b: { id: string; action: "credit" | "fail" }) => req("/admin/deposits/action", "POST", b),
   adminDepositQuery: (b: { id: string }) => req<{ reference: string; detectedPaid: boolean; amount: number; raw?: string; error?: string }>("/admin/deposits/query", "POST", b),
   adminPayouts: () => req<{ payouts: any[] }>("/admin/payouts"),
-  adminPayoutAction: (b: { id: string; action: "approve" | "reject" | "retry" }) => req("/admin/payouts/action", "POST", b),
+  adminPayoutAction: (b: { id: string; action: "approve" | "reject" | "retry" | "sync" }) => req<{ ok: boolean; status?: string; raw?: string; note?: string }>("/admin/payouts/action", "POST", b),
   adminTasks: () => req<{ tasks: any[] }>("/admin/tasks"),
   adminCreateTask: (b: { title: string; detail: string; category: string; link?: string }) =>
     req("/admin/tasks", "POST", b),

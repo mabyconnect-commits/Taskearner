@@ -521,9 +521,11 @@ async function withdraw(req: ApiRequest): Promise<ApiResponse> {
 }
 
 // Settle a SENT payout by trusting only the authenticated relay query (§5c).
-async function settlePayout(transferId: string): Promise<void> {
+// Returns the classified status + raw response so callers can diagnose/report.
+async function settlePayout(transferId: string): Promise<{ status: string; raw?: string }> {
   const [p] = await sql`SELECT * FROM payouts WHERE reference = ${transferId}`;
-  if (!p || p.status === "PAID" || p.status === "REJECTED") return;
+  if (!p) return { status: "not_found" };
+  if (p.status === "PAID" || p.status === "REJECTED") return { status: p.status.toLowerCase() };
   const res = await getProvider().queryPayout(transferId);
   if (res.status === "paid") {
     await sql`UPDATE payouts SET status = 'PAID', provider_ref = ${res.providerRef || ""}, provider_status = ${res.raw} WHERE id = ${p.id}`;
@@ -537,6 +539,7 @@ async function settlePayout(transferId: string): Promise<void> {
     });
   }
   // processing → leave SENT, re-query later
+  return { status: res.status, raw: res.raw };
 }
 
 // back_url from the relay: don't trust the body — just re-query the payout.
@@ -911,12 +914,26 @@ async function adminPayoutAction(req: ApiRequest): Promise<ApiResponse> {
       await tx`UPDATE payouts SET status = 'REJECTED', provider_status = 'manual' WHERE id = ${id}`;
       if (p.tx_id) await tx`DELETE FROM transactions WHERE id = ${p.tx_id}`;
     });
+  } else if (action === "sync") {
+    // Ask NEKpay the real status and settle (SENT → PAID or REJECTED+refund).
+    // NEVER re-dispatches, so it can't double-pay a delivered transfer.
+    const r = await settlePayout(p.reference);
+    return ok({ ok: true, status: r.status, raw: r.raw });
   } else if (action === "retry") {
-    // Re-dispatch the transfer to the gateway (for a stuck PENDING/SENT payout).
+    // Only a payout that was NEVER dispatched (PENDING) may be (re)sent. A SENT
+    // payout is already in flight/delivered — re-query it instead of re-sending,
+    // so we can never double-pay.
+    if (p.status === "SENT") {
+      const r = await settlePayout(p.reference);
+      return ok({ ok: true, status: r.status, raw: r.raw, note: "Already sent — re-queried, not re-sent." });
+    }
     const provider = getProvider();
     const nekCode = nekpayBankCode(p.bank_name);
     if (!nekCode) return err("NEKpay can't auto-pay this bank — settle it manually.");
     const net = withdrawNet(num(p.amount));
+    // Atomic claim PENDING → SENT so a double-tap can't dispatch twice.
+    const claim = await sql`UPDATE payouts SET status = 'SENT' WHERE id = ${id} AND status = 'PENDING' RETURNING id`;
+    if (claim.length === 0) return err("This payout is no longer pending.");
     const res = await provider.payout({
       transferId: p.reference,
       amount: net,
@@ -926,7 +943,11 @@ async function adminPayoutAction(req: ApiRequest): Promise<ApiResponse> {
       accountName: p.account_name,
       backUrl: `${ENV.APP_URL}/api/withdrawals/naira/callback`,
     });
-    if (res.status === "failed") return err(`Retry failed: ${res.message || "gateway rejected the request"}`);
+    if (res.status === "failed") {
+      // Dispatch rejected → back to PENDING; funds stay reserved, nothing left.
+      await sql`UPDATE payouts SET status = 'PENDING', provider_status = ${res.raw} WHERE id = ${id}`;
+      return err(`Retry failed: ${res.message || "gateway rejected the request"}`);
+    }
     const paid = res.status === "paid";
     await sql.begin(async (tx) => {
       await tx`UPDATE payouts SET status = ${paid ? "PAID" : "SENT"}, provider_ref = ${res.providerRef || ""}, provider_status = ${res.raw} WHERE id = ${id}`;

@@ -281,12 +281,18 @@ function PayoutsTab() {
   const toast = useToast();
   const { data, loading, reload } = useAsync(() => api.adminPayouts());
   const [busy, setBusy] = useState<string | null>(null);
+  const [probe, setProbe] = useState<Record<string, string>>({});
 
-  const act = async (id: string, action: "approve" | "reject" | "retry") => {
+  const act = async (id: string, action: "approve" | "reject" | "retry" | "sync") => {
     setBusy(id);
     try {
-      await api.adminPayoutAction({ id, action });
-      toast(action === "approve" ? "Marked as paid" : action === "reject" ? "Rejected & refunded" : "Retry sent", "success");
+      const r = await api.adminPayoutAction({ id, action });
+      if (r.raw || r.note) setProbe((m) => ({ ...m, [id]: JSON.stringify({ status: r.status, note: r.note, raw: r.raw }, null, 1) }));
+      const msg = action === "approve" ? "Marked as paid"
+        : action === "reject" ? "Rejected & refunded"
+        : action === "sync" ? (r.status === "paid" ? "Confirmed PAID" : r.status === "failed" ? "Gateway says failed — refunded" : `Gateway status: ${r.status}`)
+        : "Retry dispatched";
+      toast(msg, "success");
       reload();
     } catch (e: any) {
       toast(e?.message || "Failed", "error");
@@ -299,7 +305,8 @@ function PayoutsTab() {
   return (
     <div className="space-y-2">
       {(data?.payouts ?? []).map((p: any) => {
-        const open = p.status !== "PAID" && p.status !== "REJECTED";
+        const isSent = p.status === "SENT";
+        const isPending = p.status === "PENDING";
         return (
           <div key={p.id} className="card p-4">
             <div className="flex items-center justify-between">
@@ -312,18 +319,33 @@ function PayoutsTab() {
             <p className="text-sm text-slate-400">{p.user} · {p.wallet} wallet</p>
             <p className="text-xs text-slate-500">{p.bankName} · {p.accountNumber} · {p.accountName}</p>
             <IdRow label="NEKpay ID" value={p.nekpayId} />
-            {open && (
+
+            {/* SENT = already dispatched. Never re-send (double-pay). Sync = re-query. */}
+            {isSent && (
               <div className="mt-3 flex flex-wrap gap-2">
-                <button onClick={() => act(p.id, "approve")} disabled={busy === p.id} className="btn-primary flex-1 py-2.5 text-sm">
-                  {busy === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Paid
+                <button onClick={() => act(p.id, "sync")} disabled={busy === p.id} className="btn-primary flex-1 py-2.5 text-sm">
+                  {busy === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Sync status
                 </button>
-                <button onClick={() => act(p.id, "retry")} disabled={busy === p.id} className="btn-ghost flex-1 py-2.5 text-sm">
-                  <RefreshCw className="h-4 w-4" /> Retry
+                <button onClick={() => act(p.id, "approve")} disabled={busy === p.id} className="btn-ghost flex-1 py-2.5 text-sm">
+                  <Check className="h-4 w-4" /> Mark paid
+                </button>
+              </div>
+            )}
+            {isPending && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button onClick={() => act(p.id, "retry")} disabled={busy === p.id} className="btn-primary flex-1 py-2.5 text-sm">
+                  {busy === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Send
+                </button>
+                <button onClick={() => act(p.id, "approve")} disabled={busy === p.id} className="btn-ghost flex-1 py-2.5 text-sm">
+                  <Check className="h-4 w-4" /> Mark paid
                 </button>
                 <button onClick={() => act(p.id, "reject")} disabled={busy === p.id} className="btn-ghost flex-1 py-2.5 text-sm text-rose-500">
                   <X className="h-4 w-4" /> Reject
                 </button>
               </div>
+            )}
+            {probe[p.id] && (
+              <pre className="mt-2 max-h-48 overflow-auto rounded-xl bg-slate-900 p-3 text-[10px] leading-tight text-emerald-300">{probe[p.id]}</pre>
             )}
           </div>
         );
