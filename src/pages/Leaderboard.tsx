@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { formatNaira } from "@/lib/format";
 import { cn } from "@/lib/cn";
 
-type Row = { name: string; handle: string; earned: number; refs: number };
+type Row = { name: string; handle: string; earned: number; refs: number; activeRefs?: number };
 
 // Offline demo only — the live site shows real data from the database.
 const DEMO: Row[] = [
@@ -21,7 +21,7 @@ const DEMO: Row[] = [
 const medal = ["from-amber-400 to-amber-600", "from-slate-300 to-slate-500", "from-orange-400 to-orange-700"];
 
 export default function Leaderboard() {
-  const { name, sales, referrals, mode } = useStore();
+  const { name, username, sales, referrals, mode } = useStore();
   const [top, setTop] = useState<Row[]>(mode === "online" ? [] : DEMO);
   const [loading, setLoading] = useState(mode === "online");
 
@@ -35,8 +35,9 @@ export default function Leaderboard() {
     return () => { alive = false; };
   }, [mode]);
 
+  // Match by handle (usernames are unique; names can repeat or differ).
   const myRank = (() => {
-    const idx = top.findIndex((u) => u.name === name);
+    const idx = top.findIndex((u) => u.handle === username);
     return idx >= 0 ? idx + 1 : null;
   })();
 
@@ -66,14 +67,22 @@ export default function Leaderboard() {
         </div>
       )}
 
-      {/* your rank */}
-      <div className="mb-4 flex items-center gap-3 rounded-3xl bg-brand-500 p-4 text-slate-900 shadow-glow">
-        <span className="grid h-11 w-11 place-items-center rounded-full bg-black/10 font-extrabold">{myRank ?? "—"}</span>
-        <div className="flex-1">
-          <p className="font-bold">{name || "You"}</p>
-          <p className="text-xs text-slate-800/70">{referrals.length} referrals</p>
+      {/* your position (distinct from the champion — clearly labelled) */}
+      <div className="mb-4 rounded-3xl bg-brand-500 p-4 text-slate-900 shadow-glow">
+        <p className="mb-2 text-[11px] font-extrabold uppercase tracking-widest text-slate-900/60">Your position</p>
+        <div className="flex items-center gap-3">
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-black/10 font-display font-extrabold">
+            {myRank ? `#${myRank}` : "—"}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-bold">{name || "You"}</p>
+            <p className="text-xs text-slate-800/70">
+              {referrals.length} referral{referrals.length === 1 ? "" : "s"}
+              {!myRank && " · refer & earn to rank"}
+            </p>
+          </div>
+          <span className="font-display font-extrabold">{formatNaira(sales, false)}</span>
         </div>
-        <span className="font-display font-extrabold">{formatNaira(sales, false)}</span>
       </div>
 
       {loading ? (
@@ -90,13 +99,20 @@ export default function Leaderboard() {
         <div className="space-y-2">
           {top.slice(top.length >= 3 ? 3 : 0).map((u, i) => {
             const rank = (top.length >= 3 ? 3 : 0) + i + 1;
+            const isMe = u.handle === username;
             return (
-              <div key={u.handle} className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-soft dark:bg-white/[0.04]">
+              <div
+                key={u.handle}
+                className={cn(
+                  "flex items-center gap-3 rounded-2xl p-4 shadow-soft",
+                  isMe ? "bg-brand-50 ring-2 ring-brand-400 dark:bg-brand-500/10" : "bg-white dark:bg-white/[0.04]",
+                )}
+              >
                 <span className="w-6 text-center font-display font-extrabold text-slate-400">{rank}</span>
                 <div className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-ink-800 to-ink-950 font-bold text-white">{u.name[0]?.toUpperCase()}</div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold">{u.name}</p>
-                  <p className="truncate text-xs text-slate-400">@{u.handle} · {u.refs} refs</p>
+                  <p className="truncate font-bold">{u.name}{isMe && <span className="ml-1.5 text-xs font-bold text-brand-600">You</span>}</p>
+                  <p className="truncate text-xs text-slate-400">@{u.handle} · {u.refs} referral{u.refs === 1 ? "" : "s"}</p>
                 </div>
                 <span className="font-bold text-emerald-500">{formatNaira(u.earned, false)}</span>
               </div>

@@ -118,7 +118,7 @@ export const api = {
   payBill: (b: { amount: number; title: string }) => req("/bills/pay", "POST", b),
   transactions: () => req<{ transactions: any[] }>("/transactions"),
   referrals: () => req<{ referrals: any[] }>("/referrals"),
-  leaderboard: () => req<{ leaderboard: { name: string; handle: string; earned: number; refs: number }[] }>("/leaderboard"),
+  leaderboard: () => req<{ leaderboard: { name: string; handle: string; earned: number; refs: number; activeRefs?: number }[] }>("/leaderboard"),
 
   // Marketplace (live tasks + sponsored feeds, and user-paid campaign apply)
   tasks: () => req<{ tasks: ServerTask[] }>("/tasks"),
