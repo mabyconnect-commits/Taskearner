@@ -102,7 +102,7 @@ export default function Sales() {
           </div>
         </div>
         <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-          Pending earnings become <b>Available</b> to withdraw once a referral completes {REFERRAL_CONFIRM_TASKS} Voice/Sponsored activities — or instantly when they upgrade to any paid plan.
+          Pending earnings become <b>Available</b> to withdraw once a referral completes {REFERRAL_CONFIRM_TASKS} daily Voice tasks (about {REFERRAL_CONFIRM_TASKS} days) — or instantly when they upgrade to any paid plan.
         </p>
         {referral > 0 && (
           <button onClick={() => nav("/wallet")} className="btn-primary mt-3 w-full py-3">

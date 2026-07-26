@@ -265,11 +265,11 @@ async function earn(req: ApiRequest): Promise<ApiResponse> {
         WHERE id = ${refId}`;
     }
 
-    // Referral milestone: once this downline has done REFERRAL_CONFIRM_TASKS
-    // voice/sponsored activities, confirm their referrer's ₦250 bonus.
-    if ((kind === "voice" || kind === "post") && u.referred_by) {
-      const [c] = await tx`SELECT count(*)::int AS n FROM transactions WHERE user_id = ${uid} AND type IN ('voice','post')`;
-      if ((c?.n ?? 0) >= REFERRAL_CONFIRM_TASKS) await confirmReferralBonus(tx, uid, "activity milestone");
+    // Referral milestone: once this downline has completed REFERRAL_CONFIRM_TASKS
+    // Voice tasks (one per day → ~25 days), confirm their referrer's ₦250 bonus.
+    if (kind === "voice" && u.referred_by) {
+      const [c] = await tx`SELECT count(*)::int AS n FROM transactions WHERE user_id = ${uid} AND type = 'voice'`;
+      if ((c?.n ?? 0) >= REFERRAL_CONFIRM_TASKS) await confirmReferralBonus(tx, uid, "25 voice tasks");
     }
     return amt;
   });
