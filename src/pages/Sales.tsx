@@ -27,6 +27,25 @@ export default function Sales() {
     toast("Referral link copied!");
   };
 
+  const shareText = `🚀 Join me on TaskEarner and start earning daily — voice tasks, games & more! Sign up with my link: ${link}`;
+
+  const shareWhatsApp = () => {
+    // wa.me opens the WhatsApp app (or web) with the message ready to send.
+    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer");
+  };
+
+  const nativeShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "TaskEarner", text: shareText, url: link });
+        return;
+      } catch {
+        return; // user cancelled the share sheet
+      }
+    }
+    copy(); // fallback when the browser has no share sheet
+  };
+
   return (
     <Layout>
       <Drawer open={drawer} onClose={() => setDrawer(false)} />
@@ -74,10 +93,10 @@ export default function Sales() {
           </button>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <button onClick={copy} className="btn-ghost py-3">
+          <button onClick={nativeShare} className="btn-ghost py-3">
             <Share2 className="h-4 w-4" /> Share
           </button>
-          <button onClick={() => toast("Opening WhatsApp…", "info")} className="btn bg-emerald-500 py-3 text-white">
+          <button onClick={shareWhatsApp} className="btn bg-emerald-500 py-3 text-white">
             <MessageCircle className="h-4 w-4" /> WhatsApp
           </button>
         </div>
