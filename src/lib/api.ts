@@ -95,6 +95,7 @@ export interface ServerSponsored {
   headline: string;
   copy: string;
   platform: string;
+  image?: string;
 }
 
 export const api = {
@@ -122,7 +123,7 @@ export const api = {
   // Marketplace (live tasks + sponsored feeds, and user-paid campaign apply)
   tasks: () => req<{ tasks: ServerTask[] }>("/tasks"),
   sponsored: () => req<{ sponsored: ServerSponsored[] }>("/sponsored"),
-  applySponsored: (b: { headline: string; copy: string; platform: string; budget: number }) =>
+  applySponsored: (b: { headline: string; copy: string; platform: string; budget: number; image?: string }) =>
     req("/sponsored/apply", "POST", b),
 
   // Admin
@@ -140,7 +141,7 @@ export const api = {
     req("/admin/tasks", "POST", b),
   adminTaskAction: (b: { id: string; action: "enable" | "disable" | "delete" }) => req("/admin/tasks/action", "POST", b),
   adminSponsored: () => req<{ sponsored: any[] }>("/admin/sponsored"),
-  adminCreateSponsored: (b: { headline: string; copy: string; platform: string; budget?: number }) =>
+  adminCreateSponsored: (b: { headline: string; copy: string; platform: string; budget?: number; image?: string }) =>
     req("/admin/sponsored", "POST", b),
   adminSponsoredAction: (b: { id: string; action: "approve" | "reject" | "end" }) =>
     req("/admin/sponsored/action", "POST", b),

@@ -704,10 +704,22 @@ async function getTasks(req: ApiRequest): Promise<ApiResponse> {
   return ok({ tasks: rows.map((t: any) => ({ id: t.id, title: t.title, detail: t.detail, category: t.category, link: t.link })) });
 }
 
+// Validate an uploaded shareable image. We store it inline as a compressed
+// data: URL (no external blob storage), so only accept inline images and cap
+// the size so the DB/feed stay lean.
+const MAX_IMAGE_CHARS = 2_200_000; // ~1.6MB once base64-encoded
+function sanitizeImage(raw: unknown): string {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (!/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(s)) return "";
+  if (s.length > MAX_IMAGE_CHARS) throw new HttpError("Image is too large — please use one under ~1.5MB", 400);
+  return s;
+}
+
 async function getSponsored(req: ApiRequest): Promise<ApiResponse> {
   requireAuth(req);
-  const rows = await sql`SELECT id, headline, copy, platform FROM sponsored WHERE status = 'active' ORDER BY created_at DESC`;
-  return ok({ sponsored: rows.map((s: any) => ({ id: s.id, headline: s.headline, copy: s.copy, platform: s.platform })) });
+  const rows = await sql`SELECT id, headline, copy, platform, image FROM sponsored WHERE status = 'active' ORDER BY created_at DESC`;
+  return ok({ sponsored: rows.map((s: any) => ({ id: s.id, headline: s.headline, copy: s.copy, platform: s.platform, image: s.image || "" })) });
 }
 
 // A user pays (from their deposit) to run their own sponsored post. It goes to
@@ -719,6 +731,7 @@ async function applySponsored(req: ApiRequest): Promise<ApiResponse> {
   const copy = String(req.body?.copy || "").trim();
   const platform = String(req.body?.platform || "Facebook").trim() || "Facebook";
   const budget = Math.floor(Number(req.body?.budget) || 0);
+  const image = sanitizeImage(req.body?.image);
   if (headline.length < 3) return err("Give your campaign a headline");
   if (copy.length < 10) return err("Write the post content advertisers will share");
   if (budget < SPONSORED_MIN_BUDGET) return err(`Minimum campaign budget is ₦${SPONSORED_MIN_BUDGET.toLocaleString()}`);
@@ -733,8 +746,8 @@ async function applySponsored(req: ApiRequest): Promise<ApiResponse> {
       INSERT INTO transactions (user_id, type, title, amount, wallet)
       VALUES (${uid}, 'sponsored', ${"Sponsored post: " + headline}, ${-budget}, 'deposit')`;
     await tx`
-      INSERT INTO sponsored (headline, copy, platform, budget, spent, status, created_by)
-      VALUES (${headline}, ${copy}, ${platform}, ${budget}, 0, 'pending', ${uid})`;
+      INSERT INTO sponsored (headline, copy, platform, budget, spent, status, image, created_by)
+      VALUES (${headline}, ${copy}, ${platform}, ${budget}, 0, 'pending', ${image}, ${uid})`;
   });
   return ok({ user: await loadState(uid), transactions: await txList(uid) });
 }
@@ -1003,13 +1016,13 @@ async function adminTaskAction(req: ApiRequest): Promise<ApiResponse> {
 async function adminSponsored(req: ApiRequest): Promise<ApiResponse> {
   await requireAdmin(req);
   const rows = await sql`
-    SELECT s.id, s.headline, s.copy, s.platform, s.budget, s.spent, s.status, s.created_at, u.name AS advertiser, u.email
+    SELECT s.id, s.headline, s.copy, s.platform, s.budget, s.spent, s.status, s.image, s.created_at, u.name AS advertiser, u.email
     FROM sponsored s LEFT JOIN users u ON u.id = s.created_by
     ORDER BY s.created_at DESC`;
   return ok({
     sponsored: rows.map((s: any) => ({
       id: s.id, headline: s.headline, copy: s.copy, platform: s.platform,
-      budget: num(s.budget), spent: num(s.spent), status: s.status,
+      budget: num(s.budget), spent: num(s.spent), status: s.status, image: s.image || "",
       advertiser: s.advertiser || "Official", email: s.email || "",
       ts: new Date(s.created_at).getTime(),
     })),
@@ -1022,10 +1035,11 @@ async function adminCreateSponsored(req: ApiRequest): Promise<ApiResponse> {
   const copy = String(req.body?.copy || "").trim();
   const platform = String(req.body?.platform || "Facebook").trim() || "Facebook";
   const budget = Math.max(0, Math.floor(Number(req.body?.budget) || 0));
+  const image = sanitizeImage(req.body?.image);
   if (headline.length < 3) return err("Headline is required");
   if (copy.length < 10) return err("Post content is required");
   // Admin-created posts are official (budget 0 = unlimited) and go live immediately.
-  await sql`INSERT INTO sponsored (headline, copy, platform, budget, spent, status) VALUES (${headline}, ${copy}, ${platform}, ${budget}, 0, 'active')`;
+  await sql`INSERT INTO sponsored (headline, copy, platform, budget, spent, status, image) VALUES (${headline}, ${copy}, ${platform}, ${budget}, 0, 'active', ${image})`;
   return ok({ ok: true }, 201);
 }
 

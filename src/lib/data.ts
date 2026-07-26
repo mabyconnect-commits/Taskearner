@@ -299,6 +299,7 @@ export interface SponsoredPost {
   headline: string;
   platform: "WhatsApp" | "Facebook" | "X" | "Instagram" | "TikTok";
   copy: string;
+  image?: string;
 }
 
 export const SPONSORED_POSTS: SponsoredPost[] = [

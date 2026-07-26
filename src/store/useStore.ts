@@ -88,7 +88,7 @@ interface State {
   changePassword: (p: { currentPassword: string; newPassword: string }) => Promise<Result>;
   updateProfile: (p: { name?: string; phone?: string; email?: string }) => Promise<Result>;
   payBill: (p: { amount: number; title: string }) => Promise<Result>;
-  advertisePost: (p: { headline: string; copy: string; platform: string; budget: number }) => Promise<Result>;
+  advertisePost: (p: { headline: string; copy: string; platform: string; budget: number; image?: string }) => Promise<Result>;
   refresh: () => Promise<void>;
   simulateReferral: () => Promise<Result>;
 }
@@ -497,10 +497,10 @@ export const useStore = create<State>()(
           return { ok: true, msg: "Payment successful." };
         },
 
-        advertisePost: async ({ headline, copy, platform, budget }) => {
+        advertisePost: async ({ headline, copy, platform, budget, image }) => {
           if (online()) {
             try {
-              const r: any = await api.applySponsored({ headline, copy, platform, budget });
+              const r: any = await api.applySponsored({ headline, copy, platform, budget, image });
               applyUser(r.user, r.transactions);
               return { ok: true, msg: "Campaign submitted! It goes live after review." };
             } catch (e) {

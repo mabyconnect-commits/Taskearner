@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { Copy, Check, Share2, Crown, Loader2, Megaphone, X } from "lucide-react";
+import { Copy, Check, Share2, Crown, Loader2, Megaphone, X, Download, ImagePlus } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useStore } from "@/store/useStore";
 import { planById, SPONSORED_POSTS, SponsoredPost, SALES_WITHDRAW_MIN } from "@/lib/data";
 import { api } from "@/lib/api";
 import { formatNaira } from "@/lib/format";
+import { compressImage, downloadDataUrl } from "@/lib/image";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 
@@ -91,15 +92,19 @@ export default function Sponsored() {
           const isShared = shared.includes(post.id);
           return (
             <div key={post.id} className="card overflow-hidden">
-              {/* promo banner (the shareable graphic) */}
-              <div className="relative overflow-hidden bg-gradient-to-br from-ink-800 via-ink-900 to-ink-950 p-5 text-white">
-                <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-brand-500/25 blur-2xl" />
-                <p className="font-display text-3xl font-extrabold leading-none text-brand-400">MILLIONS<br />DAILY!</p>
-                <p className="mt-2 max-w-[80%] text-xs text-white/70">{post.headline} — join Task Earner Africa and turn your voice into alerts. 💸</p>
-                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 text-xs font-bold text-emerald-300">
-                  ✓ Credit Alert · NGN 250,000.00
+              {/* the shareable graphic: the admin's uploaded image, or a fallback banner */}
+              {post.image ? (
+                <img src={post.image} alt={post.headline} className="max-h-80 w-full bg-slate-100 object-contain dark:bg-black/30" />
+              ) : (
+                <div className="relative overflow-hidden bg-gradient-to-br from-ink-800 via-ink-900 to-ink-950 p-5 text-white">
+                  <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-brand-500/25 blur-2xl" />
+                  <p className="font-display text-3xl font-extrabold leading-none text-brand-400">MILLIONS<br />DAILY!</p>
+                  <p className="mt-2 max-w-[80%] text-xs text-white/70">{post.headline} — join Task Earner Africa and turn your voice into alerts. 💸</p>
+                  <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 text-xs font-bold text-emerald-300">
+                    ✓ Credit Alert · NGN 250,000.00
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="p-4">
                 <div className="mb-3 flex items-center justify-between">
@@ -107,7 +112,15 @@ export default function Sponsored() {
                   <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300">+{formatNaira(p.perPost, false)}</span>
                 </div>
                 <p className="rounded-2xl bg-slate-50 p-3 text-sm text-slate-600 dark:bg-white/5 dark:text-slate-300">"{post.copy}"</p>
-                <button onClick={() => copy(post)} className="btn-ghost mt-3 w-full py-3 text-sm">
+                {post.image && (
+                  <button
+                    onClick={() => { downloadDataUrl(post.image!, `taskearner-${post.id}.jpg`); toast("Image downloaded — post it with the caption!", "success"); }}
+                    className="btn mt-3 w-full bg-ink-900 py-3 text-sm text-white dark:bg-white/10"
+                  >
+                    <Download className="h-4 w-4" /> Download image
+                  </button>
+                )}
+                <button onClick={() => copy(post)} className="btn-ghost mt-2 w-full py-3 text-sm">
                   {copied === post.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   {copied === post.id ? "Copied" : "Copy content"}
                 </button>
@@ -145,15 +158,29 @@ function AdvertiseSheet({
 }: {
   deposit: number;
   onClose: () => void;
-  onSubmit: (p: { headline: string; copy: string; platform: string; budget: number }) => Promise<{ ok: boolean; msg: string }>;
+  onSubmit: (p: { headline: string; copy: string; platform: string; budget: number; image?: string }) => Promise<{ ok: boolean; msg: string }>;
 }) {
   const toast = useToast();
   const [headline, setHeadline] = useState("");
   const [copy, setCopy] = useState("");
   const [platform, setPlatform] = useState<string>("WhatsApp");
   const [budget, setBudget] = useState("");
+  const [image, setImage] = useState<string>("");
+  const [imgBusy, setImgBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const n = Number(budget) || 0;
+
+  const pickImage = async (file?: File) => {
+    if (!file) return;
+    setImgBusy(true);
+    try {
+      setImage(await compressImage(file));
+    } catch (e: any) {
+      toast(e?.message || "Could not process that image", "error");
+    } finally {
+      setImgBusy(false);
+    }
+  };
 
   const submit = async () => {
     if (headline.trim().length < 3) return toast("Give your campaign a headline", "error");
@@ -161,7 +188,7 @@ function AdvertiseSheet({
     if (n < SALES_WITHDRAW_MIN) return toast(`Minimum budget is ${formatNaira(SALES_WITHDRAW_MIN)}`, "error");
     if (n > deposit) return toast("Insufficient deposit. Fund your wallet first.", "error");
     setBusy(true);
-    const res = await onSubmit({ headline: headline.trim(), copy: copy.trim(), platform, budget: n });
+    const res = await onSubmit({ headline: headline.trim(), copy: copy.trim(), platform, budget: n, image: image || undefined });
     setBusy(false);
     toast(res.msg, res.ok ? "success" : "error");
     if (res.ok) onClose();
@@ -190,6 +217,21 @@ function AdvertiseSheet({
             <span className="mb-1.5 block text-sm font-semibold text-slate-500">Post content</span>
             <textarea value={copy} onChange={(e) => setCopy(e.target.value)} className="input min-h-[90px] resize-none" placeholder="The exact caption earners will post…" maxLength={280} />
           </label>
+          <div>
+            <span className="mb-1.5 block text-sm font-semibold text-slate-500">Flyer image (optional)</span>
+            {image ? (
+              <div className="relative overflow-hidden rounded-2xl">
+                <img src={image} alt="Flyer preview" className="max-h-52 w-full object-contain bg-slate-100 dark:bg-black/30" />
+                <button onClick={() => setImage("")} className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-black/60 text-white"><X className="h-4 w-4" /></button>
+              </div>
+            ) : (
+              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 py-6 text-sm font-semibold text-slate-500 dark:border-white/10">
+                {imgBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
+                {imgBusy ? "Processing…" : "Upload an image earners can download"}
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => pickImage(e.target.files?.[0])} />
+              </label>
+            )}
+          </div>
           <div>
             <span className="mb-2 block text-sm font-semibold text-slate-500">Platform</span>
             <div className="flex flex-wrap gap-2">

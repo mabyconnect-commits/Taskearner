@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, ArrowLeftRight, Banknote, ListChecks, Megaphone,
-  Loader2, Plus, Check, X, Power, Trash2, RefreshCw, Wallet, Copy, Bot,
+  Loader2, Plus, Check, X, Power, Trash2, RefreshCw, Wallet, Copy, Bot, ImagePlus,
 } from "lucide-react";
 import { Layout } from "@/components/Layout";
+import { compressImage } from "@/lib/image";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useStore } from "@/store/useStore";
 import { api } from "@/lib/api";
@@ -484,16 +485,31 @@ function SponsoredTab() {
   const { data, loading, reload } = useAsync(() => api.adminSponsored());
   const [busy, setBusy] = useState<string | null>(null);
   const [form, setForm] = useState({ headline: "", copy: "", platform: "Facebook", budget: "" });
+  const [image, setImage] = useState<string>("");
+  const [imgBusy, setImgBusy] = useState(false);
   const [creating, setCreating] = useState(false);
+
+  const pickImage = async (file?: File) => {
+    if (!file) return;
+    setImgBusy(true);
+    try {
+      setImage(await compressImage(file));
+    } catch (e: any) {
+      toast(e?.message || "Could not process that image", "error");
+    } finally {
+      setImgBusy(false);
+    }
+  };
 
   const create = async () => {
     if (form.headline.trim().length < 3) return toast("Headline is required", "error");
     if (form.copy.trim().length < 10) return toast("Post content is required", "error");
     setCreating(true);
     try {
-      await api.adminCreateSponsored({ headline: form.headline.trim(), copy: form.copy.trim(), platform: form.platform, budget: Number(form.budget) || 0 });
+      await api.adminCreateSponsored({ headline: form.headline.trim(), copy: form.copy.trim(), platform: form.platform, budget: Number(form.budget) || 0, image: image || undefined });
       toast("Official post published", "success");
       setForm({ headline: "", copy: "", platform: "Facebook", budget: "" });
+      setImage("");
       reload();
     } catch (e: any) {
       toast(e?.message || "Failed", "error");
@@ -532,7 +548,19 @@ function SponsoredTab() {
           </select>
           <input value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value.replace(/\D/g, "") })} className="input flex-1" placeholder="Budget (0 = unlimited)" inputMode="numeric" />
         </div>
-        <button onClick={create} disabled={creating} className="btn-primary w-full py-3">
+        {image ? (
+          <div className="relative overflow-hidden rounded-2xl">
+            <img src={image} alt="Post image preview" className="max-h-52 w-full bg-slate-100 object-contain dark:bg-black/30" />
+            <button onClick={() => setImage("")} className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-black/60 text-white"><X className="h-4 w-4" /></button>
+          </div>
+        ) : (
+          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 py-5 text-sm font-semibold text-slate-500 dark:border-white/10">
+            {imgBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
+            {imgBusy ? "Processing…" : "Add image (earners can download it)"}
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => pickImage(e.target.files?.[0])} />
+          </label>
+        )}
+        <button onClick={create} disabled={creating || imgBusy} className="btn-primary w-full py-3">
           {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Publish
         </button>
       </div>
@@ -545,7 +573,8 @@ function SponsoredTab() {
                 <p className="font-bold">{s.headline}</p>
                 <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold", statusTone(s.status))}>{s.status}</span>
               </div>
-              <p className="text-sm text-slate-400">"{s.copy}"</p>
+              {s.image && <img src={s.image} alt={s.headline} className="mt-2 max-h-40 w-full rounded-xl bg-slate-100 object-contain dark:bg-black/30" />}
+              <p className="mt-2 text-sm text-slate-400">"{s.copy}"</p>
               <p className="mt-1 text-xs text-slate-500">
                 {s.platform} · by {s.advertiser}
                 {s.budget > 0 && <> · budget {formatNaira(s.budget)} (spent {formatNaira(s.spent)})</>}

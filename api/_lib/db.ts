@@ -160,10 +160,13 @@ export async function ensureSchema(): Promise<void> {
         budget     numeric(14,2) NOT NULL DEFAULT 0,
         spent      numeric(14,2) NOT NULL DEFAULT 0,
         status     text NOT NULL DEFAULT 'active',
+        image      text NOT NULL DEFAULT '',
         created_by uuid REFERENCES users(id) ON DELETE SET NULL,
         created_at timestamptz NOT NULL DEFAULT now()
       );
     `;
+    // Shareable image (a compressed data: URL) earners can download for a post.
+    await sql`ALTER TABLE sponsored ADD COLUMN IF NOT EXISTS image text NOT NULL DEFAULT ''`;
 
     // Telegram support bot: per-chat conversation state (serverless is stateless,
     // so the "what is this chat waiting to send me" flag lives here).
