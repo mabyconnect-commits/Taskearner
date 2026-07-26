@@ -1153,6 +1153,67 @@ async function openTicketCount(chatId: string, kind: "deposit" | "withdrawal"): 
   return r?.n ?? 0;
 }
 
+// Telegram usernames allowed to resolve tickets + use admin commands.
+function isBotAdmin(username?: string | null): boolean {
+  if (!username) return false;
+  return ENV.TELEGRAM_ADMINS.includes(String(username).replace(/^@/, "").toLowerCase());
+}
+
+const ADMIN_HELP =
+  "🔐 <b>Admin commands</b>\n\n" +
+  "<code>/find email@example.com</code> — look up a user's deposits &amp; latest withdrawal, with one-tap Credit / Mark-paid buttons.\n\n" +
+  "You can also reply <b>done</b> to any ticket in the ops group to resolve it and auto-notify the user.";
+
+// Admin lookup: show a user's pending deposits + latest payout with actions.
+async function adminFind(chatId: string, email: string): Promise<void> {
+  const clean = email.trim().toLowerCase();
+  if (!/^\S+@\S+\.\S+$/.test(clean)) {
+    await tgSend(chatId, "Usage: <code>/find email@example.com</code>");
+    return;
+  }
+  const [u] = await sql`SELECT id, name, username FROM users WHERE lower(email) = ${clean}`;
+  if (!u) {
+    await tgSend(chatId, `No account found for <b>${clean}</b>.`);
+    return;
+  }
+  const pend = await sql`SELECT reference, amount FROM payments WHERE user_id = ${u.id} AND purpose = 'fund' AND status = 'pending'`;
+  const pendTotal = pend.reduce((s: number, p: any) => s + num(p.amount), 0);
+  const [payout] = await sql`SELECT reference, amount, bank_name, account_number, status FROM payouts WHERE user_id = ${u.id} ORDER BY created_at DESC LIMIT 1`;
+
+  let body = `👤 <b>${u.name}</b> (@${u.username})\nEmail: <code>${clean}</code>\n\n`;
+  body += `💰 Pending deposits: <b>${pend.length}</b> totalling <b>${formatNgn(pendTotal)}</b>\n`;
+  if (payout) body += `💸 Latest payout: <b>${formatNgn(num(payout.amount))}</b> → ${payout.bank_name} (${payout.account_number}) — <b>${payout.status}</b>\n`;
+  else body += `💸 No withdrawals yet.\n`;
+
+  const buttons: { text: string; callback_data: string }[][] = [];
+  if (pend.length > 0) buttons.push([{ text: `✅ Credit deposits (${formatNgn(pendTotal)})`, callback_data: `credit:${clean}` }]);
+  if (payout && payout.status !== "PAID" && payout.status !== "REJECTED") buttons.push([{ text: `✅ Mark payout PAID`, callback_data: `markpaid:${clean}` }]);
+  await tgSend(chatId, body, buttons.length ? buttons : undefined);
+}
+
+// Admin action: force-credit all of a user's pending deposits.
+async function adminCreditDeposits(email: string): Promise<{ n: number; total: number }> {
+  const [u] = await sql`SELECT id FROM users WHERE lower(email) = ${email}`;
+  if (!u) return { n: 0, total: 0 };
+  const pend = await sql`SELECT reference, amount FROM payments WHERE user_id = ${u.id} AND purpose = 'fund' AND status = 'pending'`;
+  let total = 0;
+  for (const p of pend) { await creditDeposit(p.reference); total += num(p.amount); }
+  return { n: pend.length, total };
+}
+
+// Admin action: mark a user's latest in-flight payout PAID.
+async function adminMarkPayoutPaid(email: string): Promise<{ ok: boolean; amount: number }> {
+  const [u] = await sql`SELECT id FROM users WHERE lower(email) = ${email}`;
+  if (!u) return { ok: false, amount: 0 };
+  const [p] = await sql`SELECT * FROM payouts WHERE user_id = ${u.id} AND status NOT IN ('PAID','REJECTED') ORDER BY created_at DESC LIMIT 1`;
+  if (!p) return { ok: false, amount: 0 };
+  await sql.begin(async (tx) => {
+    await tx`UPDATE payouts SET status = 'PAID', provider_status = 'admin-bot' WHERE id = ${p.id}`;
+    if (p.tx_id) await tx`UPDATE transactions SET status = 'completed' WHERE id = ${p.tx_id}`;
+  });
+  return { ok: true, amount: num(p.amount) };
+}
+
 // Deposit help: users normally don't have a TE… reference, so accept the email
 // they signed up with (or a reference if they happen to have one) and find the
 // stuck payment for them.
@@ -1403,6 +1464,8 @@ async function botHandleGroupMessage(msg: any): Promise<void> {
   if (!reply) return; // ignore ordinary group chatter
   const [t] = await sql`SELECT * FROM support_tickets WHERE group_msg_id = ${reply.message_id}`;
   if (!t) return;
+  // Only bot admins may resolve tickets / relay updates to users.
+  if (!isBotAdmin(msg.from?.username)) return;
   const verdict = text.toLowerCase();
   const resolved = /(done|success|paid|resolved|settled|credited|fixed|complete)/.test(verdict);
   if (!resolved) {
@@ -1426,6 +1489,21 @@ async function botHandleCallback(cq: any): Promise<void> {
   const data = String(cq.data || "");
   await tgAnswer(cq.id);
   if (!chatId) return;
+
+  // Admin one-tap actions from /find (admin-only).
+  if (data.startsWith("credit:") || data.startsWith("markpaid:")) {
+    if (!isBotAdmin(cq.from?.username)) { await tgSend(chatId, "Admins only."); return; }
+    const email = data.slice(data.indexOf(":") + 1);
+    if (data.startsWith("credit:")) {
+      const r = await adminCreditDeposits(email);
+      await tgSend(chatId, r.n ? `✅ Credited <b>${formatNgn(r.total)}</b> across ${r.n} deposit(s) for <code>${email}</code>.` : `No pending deposits for <code>${email}</code>.`);
+    } else {
+      const r = await adminMarkPayoutPaid(email);
+      await tgSend(chatId, r.ok ? `✅ Marked <b>${formatNgn(r.amount)}</b> payout as PAID for <code>${email}</code>.` : `No in-flight payout for <code>${email}</code>.`);
+    }
+    return;
+  }
+
   if (data === "deposit_issue") {
     await setBotState(chatId, "await_deposit_ref");
     await tgSend(chatId, "🆘 <b>Deposit not credited</b>\n\nSend me the <b>email you signed up with</b> on the app. I'll find your payment and credit it right away if it's confirmed. 💡", backToMenu());
@@ -1486,6 +1564,16 @@ async function botHandleMessage(msg: any): Promise<void> {
   if (cmd === "/faq") {
     await setBotState(chatId, "idle");
     await tgSend(chatId, FAQ_TEXT, [...backToMenu(), ...linkButtons()]);
+    return;
+  }
+  // Admin-only commands.
+  if (cmd === "/admin") {
+    await tgSend(chatId, isBotAdmin(msg.from?.username) ? ADMIN_HELP : "This command is for admins only.");
+    return;
+  }
+  if (cmd === "/find") {
+    if (!isBotAdmin(msg.from?.username)) { await tgSend(chatId, "This command is for admins only."); return; }
+    await adminFind(chatId, text.split(/\s+/)[1] || "");
     return;
   }
   const st = await getBotState(chatId);

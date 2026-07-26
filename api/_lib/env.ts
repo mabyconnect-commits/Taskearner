@@ -43,6 +43,10 @@ export const ENV = {
   TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || "",
   TELEGRAM_SUPPORT_GROUP_ID: process.env.TELEGRAM_SUPPORT_GROUP_ID || "",
   TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET || "",
+  // Telegram usernames (without @) allowed to resolve tickets + use admin
+  // commands in the bot. Comma-separated; defaults to the app owners.
+  TELEGRAM_ADMINS: (process.env.TELEGRAM_ADMINS || "Charmerfz3,Jadennkurtz")
+    .split(",").map((s) => s.trim().replace(/^@/, "").toLowerCase()).filter(Boolean),
   // Public-facing links surfaced in the bot menu.
   // Canonical domain: the bare apex (taskearner.site) 308-redirects to www, and
   // Telegram / payment callbacks don't follow redirects — so default to www.
