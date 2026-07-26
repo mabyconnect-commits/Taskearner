@@ -613,23 +613,26 @@ async function getReferrals(req: ApiRequest): Promise<ApiResponse> {
   return ok({ referrals: await referralList(uid) });
 }
 
-// Real affiliate leaderboard: everyone who is actually an affiliate — anyone
-// with commission earned OR at least one referral — ranked by earnings, then by
-// activated referrals, then total referrals. (The old query hid affiliates who
-// had referrals but hadn't earned commission yet, so the board looked empty.)
+// Real affiliate leaderboard. Ranks by LIFETIME commission earned — the sum of
+// every commission credited — not the current sales-wallet balance, so a top
+// earner who has already withdrawn still shows their true total (the old query
+// used u.sales, which drops to 0 after a withdrawal). Includes anyone who is
+// genuinely an affiliate: has earned commission OR has at least one referral.
 async function leaderboard(req: ApiRequest): Promise<ApiResponse> {
   requireAuth(req);
   const rows = await sql`
-    SELECT u.name, u.username, u.sales,
+    SELECT u.name, u.username,
+      COALESCE((SELECT sum(t.amount) FROM transactions t WHERE t.user_id = u.id AND t.type = 'commission'), 0) AS earned,
       (SELECT count(*)::int FROM referrals r WHERE r.referrer_id = u.id) AS refs,
       (SELECT count(*)::int FROM referrals r WHERE r.referrer_id = u.id AND r.status = 'activated') AS active_refs
     FROM users u
-    WHERE u.sales > 0 OR EXISTS (SELECT 1 FROM referrals r WHERE r.referrer_id = u.id)
-    ORDER BY u.sales DESC, active_refs DESC, refs DESC, u.created_at ASC
+    WHERE EXISTS (SELECT 1 FROM referrals r WHERE r.referrer_id = u.id)
+       OR EXISTS (SELECT 1 FROM transactions t WHERE t.user_id = u.id AND t.type = 'commission')
+    ORDER BY earned DESC, active_refs DESC, refs DESC, u.created_at ASC
     LIMIT 50`;
   return ok({
     leaderboard: rows.map((u: any) => ({
-      name: u.name, handle: u.username, earned: num(u.sales), refs: u.refs, activeRefs: u.active_refs,
+      name: u.name, handle: u.username, earned: num(u.earned), refs: u.refs, activeRefs: u.active_refs,
     })),
   });
 }

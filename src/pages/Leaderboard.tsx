@@ -36,10 +36,11 @@ export default function Leaderboard() {
   }, [mode]);
 
   // Match by handle (usernames are unique; names can repeat or differ).
-  const myRank = (() => {
-    const idx = top.findIndex((u) => u.handle === username);
-    return idx >= 0 ? idx + 1 : null;
-  })();
+  const myIdx = top.findIndex((u) => u.handle === username);
+  const myRank = myIdx >= 0 ? myIdx + 1 : null;
+  // Show lifetime earnings (from the board) so it doesn't drop to ₦0 after a
+  // withdrawal; fall back to the live sales balance when not yet on the board.
+  const myEarned = myIdx >= 0 ? top[myIdx].earned : sales;
 
   return (
     <Layout>
@@ -56,8 +57,9 @@ export default function Leaderboard() {
                 <div className={cn("grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br text-lg font-extrabold text-white ring-4 ring-white dark:ring-[#0b0710]", medal[idx])}>
                   {u.name[0]?.toUpperCase()}
                 </div>
-                <p className="mt-1 truncate text-xs font-bold">{u.name.split(" ")[0]}</p>
+                <p className="mt-1 max-w-full truncate text-xs font-bold">{u.name.split(" ")[0]}</p>
                 <p className="text-[11px] font-semibold text-emerald-500">{formatNaira(u.earned, false)}</p>
+                <p className="text-[10px] font-semibold text-slate-400">{u.refs} referral{u.refs === 1 ? "" : "s"}</p>
                 <div className={cn("mt-1 w-full rounded-t-2xl bg-gradient-to-b from-brand-400 to-brand-600 text-center text-slate-900", h)}>
                   <span className="inline-block pt-2 font-display text-2xl font-extrabold">{idx + 1}</span>
                 </div>
@@ -81,7 +83,7 @@ export default function Leaderboard() {
               {!myRank && " · refer & earn to rank"}
             </p>
           </div>
-          <span className="font-display font-extrabold">{formatNaira(sales, false)}</span>
+          <span className="font-display font-extrabold">{formatNaira(myEarned, false)}</span>
         </div>
       </div>
 
