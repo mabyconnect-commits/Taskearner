@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { Send, MessageCircle, Users } from "lucide-react";
 import { Sheet } from "@/components/ui/Sheet";
 
-// Community links (kept in sync with the drawer).
+// Community + support links (kept in sync with the drawer).
 export const TG_CHANNEL = "https://t.me/taskearning101";
 export const TG_GROUP = "https://t.me/+ABIZY4MltSdmNzI5";
+export const TG_SUPPORT_BOT = "https://t.me/TaskEarnerSupportBot";
 
 const SEEN_KEY = "te_tg_prompt_v1";
 

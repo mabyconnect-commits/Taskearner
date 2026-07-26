@@ -3,9 +3,10 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   X, Home, Coins, Receipt, Wallet, ArrowUpCircle, Crown, Users, Trophy, Bell, User,
-  Sun, Moon, Send, MessageCircle, LogOut, Shield,
+  Sun, Moon, Send, MessageCircle, LogOut, Shield, LifeBuoy,
 } from "lucide-react";
 import { useStore } from "@/store/useStore";
+import { TG_SUPPORT_BOT } from "@/components/JoinTelegram";
 import { cn } from "@/lib/cn";
 
 const links = [
@@ -108,6 +109,14 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
             </nav>
 
             <div className="space-y-2 pt-2">
+              <a
+                className="btn w-full bg-brand-500 py-3 text-slate-900"
+                href={TG_SUPPORT_BOT}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <LifeBuoy className="h-4 w-4" /> Chat with Support
+              </a>
               <a
                 className="btn w-full bg-sky-500 py-3 text-white"
                 href="https://t.me/taskearning101"
