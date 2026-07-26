@@ -1303,7 +1303,10 @@ async function adminTelegramSetup(req: ApiRequest): Promise<ApiResponse> {
   await requireAdmin(req);
   if (!botEnabled()) return err("Set TELEGRAM_BOT_TOKEN first");
   const base = (String(req.body?.url || ENV.APP_PUBLIC_URL || ENV.APP_URL) || "").replace(/\/+$/, "");
-  const hookUrl = `${base}/api/telegram/webhook`;
+  // Trailing slash on purpose: the site enforces trailing slashes, so the
+  // slash-less form 308-redirects and Telegram (which won't follow redirects)
+  // treats it as a failure. Registering the canonical slashed URL avoids that.
+  const hookUrl = `${base}/api/telegram/webhook/`;
   const set = await setWebhook(hookUrl, ENV.TELEGRAM_WEBHOOK_SECRET);
   const info = await getWebhookInfo();
   return ok({
