@@ -3,7 +3,7 @@ import { Mic, Gamepad2, Megaphone, CheckCircle2, Infinity as Inf, Plus, Crown, C
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useStore } from "@/store/useStore";
-import { PLANS, planById } from "@/lib/data";
+import { PLANS, planById, planDailyMax } from "@/lib/data";
 import { formatNaira } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
@@ -75,6 +75,17 @@ export default function Packages() {
                 <Row icon={<Megaphone className="h-4 w-4" />} color="text-amber-500" amount={p.perPost} label="per Sponsored Post" />
                 <Row icon={<CheckCircle2 className="h-4 w-4" />} color="text-emerald-500" amount={p.perTask} label="per Task" />
                 <Row icon={<Users className="h-4 w-4" />} color="text-indigo-500" amount={p.commission} label="per activated Sale" last />
+
+                {/* Total daily earning = one of each activity per day (Voice +
+                    Word + Sponsored Post + Task). Referral commission is not a
+                    daily activity, so it's excluded. */}
+                <div className="mt-3 flex items-center justify-between rounded-2xl bg-brand-500 px-4 py-3.5 text-slate-900 shadow-soft">
+                  <div>
+                    <p className="text-sm font-bold">Total daily earning</p>
+                    <p className="text-[11px] font-semibold text-slate-900/60">Voice + Word + Post + Task, once each</p>
+                  </div>
+                  <span className="font-display text-2xl font-extrabold">{formatNaira(planDailyMax(p), false)}</span>
+                </div>
 
                 <div className="mt-3 flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm dark:bg-white/5">
                   <span className="font-semibold text-slate-500">Min. engagement withdrawal</span>
