@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { ensureSchema, sql, num } from "./_lib/db.js";
 import { ApiRequest, ApiResponse, HttpError, ok, err, textResp } from "./_lib/http.js";
 import { comparePassword, hashPassword, requireAuth, signToken } from "./_lib/auth.js";
-import { PLANS, planOf, SALES_WITHDRAW_MIN, COOLDOWN_MS, WORD_ROUNDS, dailyMax, utcDay, depositTax, depositTotal, withdrawFee, withdrawNet } from "./_lib/plans.js";
+import { PLANS, planOf, SALES_WITHDRAW_MIN, COOLDOWN_MS, WORD_ROUNDS, dailyMax, utcDay, depositTax, depositTotal, withdrawFee, withdrawNet, REFERRAL_BONUS, REFERRAL_CONFIRM_TASKS, REFERRAL_WITHDRAW_MIN } from "./_lib/plans.js";
 import { loadState, serializeUser, isAdminEmail } from "./_lib/state.js";
 import { getProvider } from "./_lib/payments/index.js";
 import { nekpayBankCode } from "./_lib/payments/banks.js";
@@ -38,6 +38,24 @@ async function txList(uid: string) {
     id: t.id, type: t.type, title: t.title, amount: num(t.amount),
     wallet: t.wallet, status: t.status, ts: new Date(t.created_at).getTime(),
   }));
+}
+
+// Move a downline's ₦250 signup bonus from pending → available in the referrer's
+// referral wallet. Idempotent: only acts while the row is still pending.
+async function confirmReferralBonus(tx: any, downlineId: string, reason: string): Promise<void> {
+  const [r] = await tx`
+    SELECT id, referrer_id, bonus FROM referrals
+    WHERE referred_id = ${downlineId} AND bonus_status = 'pending'
+    FOR UPDATE`;
+  if (!r || !r.referrer_id) return;
+  const bonus = num(r.bonus);
+  await tx`UPDATE referrals SET bonus_status = 'available' WHERE id = ${r.id}`;
+  if (bonus > 0) {
+    await tx`UPDATE users SET referral = referral + ${bonus} WHERE id = ${r.referrer_id}`;
+    await tx`
+      INSERT INTO transactions (user_id, type, title, amount, wallet)
+      VALUES (${r.referrer_id}, 'referral', ${"Referral bonus (" + reason + ")"}, ${bonus}, 'referral')`;
+  }
 }
 
 async function referralList(uid: string) {
@@ -80,9 +98,11 @@ async function signup(req: ApiRequest): Promise<ApiResponse> {
     RETURNING *`;
 
   if (referrer) {
+    // Each signup earns the referrer a ₦250 referral-wallet bonus, held as
+    // 'pending' until this downline qualifies (25 activities or a paid upgrade).
     await sql`
-      INSERT INTO referrals (referrer_id, referred_id, name, status)
-      VALUES (${referrer.id}, ${u.id}, ${name.trim()}, 'pending')`;
+      INSERT INTO referrals (referrer_id, referred_id, name, status, bonus, bonus_status)
+      VALUES (${referrer.id}, ${u.id}, ${name.trim()}, 'pending', ${REFERRAL_BONUS}, 'pending')`;
   }
 
   const token = signToken(u.id);
@@ -244,6 +264,13 @@ async function earn(req: ApiRequest): Promise<ApiResponse> {
             status = CASE WHEN budget > 0 AND spent + ${amt} >= budget THEN 'ended' ELSE status END
         WHERE id = ${refId}`;
     }
+
+    // Referral milestone: once this downline has done REFERRAL_CONFIRM_TASKS
+    // voice/sponsored activities, confirm their referrer's ₦250 bonus.
+    if ((kind === "voice" || kind === "post") && u.referred_by) {
+      const [c] = await tx`SELECT count(*)::int AS n FROM transactions WHERE user_id = ${uid} AND type IN ('voice','post')`;
+      if ((c?.n ?? 0) >= REFERRAL_CONFIRM_TASKS) await confirmReferralBonus(tx, uid, "activity milestone");
+    }
     return amt;
   });
 
@@ -286,6 +313,10 @@ async function activatePlan(req: ApiRequest): Promise<ApiResponse> {
           VALUES (${u.referred_by}, 'commission', 'Referral commission', ${commission}, 'sales')`;
       }
     }
+
+    // A paid upgrade instantly confirms this user's ₦250 referral-wallet bonus
+    // for whoever referred them.
+    if (u.referred_by) await confirmReferralBonus(tx, uid, "paid upgrade");
   });
 
   return ok({ user: await loadState(uid), transactions: await txList(uid) });
@@ -424,17 +455,18 @@ async function nekpayCallback(req: ApiRequest): Promise<ApiResponse> {
 // ── Withdrawals (pay-out via relay) ──────────────────────────────────────────
 async function withdraw(req: ApiRequest): Promise<ApiResponse> {
   const uid = requireAuth(req);
-  const walletKind = req.body?.wallet === "sales" ? "sales" : "engagement";
+  const w = String(req.body?.wallet || "");
+  const walletKind: "sales" | "engagement" | "referral" = w === "sales" ? "sales" : w === "referral" ? "referral" : "engagement";
   const amount = Math.floor(Number(req.body?.amount) || 0);
 
   const [u] = await sql`SELECT * FROM users WHERE id = ${uid}`;
   const [bank] = await sql`SELECT * FROM banks WHERE user_id = ${uid}`;
   if (!bank) return err("Add a payout bank account first");
   const plan = planOf(u.plan);
-  // Engagement minimum depends on the user's plan; sales is flat for everyone.
-  const minWithdraw = walletKind === "sales" ? SALES_WITHDRAW_MIN : plan.minWithdraw;
+  // Engagement minimum depends on the user's plan; sales & referral are flat.
+  const minWithdraw = walletKind === "sales" ? SALES_WITHDRAW_MIN : walletKind === "referral" ? REFERRAL_WITHDRAW_MIN : plan.minWithdraw;
   if (amount < minWithdraw) return err(`Minimum withdrawal is ₦${minWithdraw.toLocaleString()}`);
-  const balance = walletKind === "sales" ? num(u.sales) : num(u.engagement);
+  const balance = walletKind === "sales" ? num(u.sales) : walletKind === "referral" ? num(u.referral) : num(u.engagement);
   if (amount > balance) return err("Insufficient balance in this wallet");
 
   // 3.5% tax + ₦50 VAT come off the withdrawal; the user receives the net. The
@@ -466,9 +498,9 @@ async function withdraw(req: ApiRequest): Promise<ApiResponse> {
   // The debit is conditional on sufficient balance so two concurrent withdrawals
   // can never overdraw / double-spend the same funds.
   const reserved = await sql.begin(async (tx) => {
-    const debited = walletKind === "sales"
-      ? await tx`UPDATE users SET sales = sales - ${amount} WHERE id = ${uid} AND sales >= ${amount} RETURNING id`
-      : await tx`UPDATE users SET engagement = engagement - ${amount} WHERE id = ${uid} AND engagement >= ${amount} RETURNING id`;
+    // Conditional debit on the chosen wallet column (identifier via sql()).
+    const col = sql(walletKind);
+    const debited = await tx`UPDATE users SET ${col} = ${col} - ${amount} WHERE id = ${uid} AND ${col} >= ${amount} RETURNING id`;
     if (debited.length === 0) throw new HttpError("Insufficient balance in this wallet", 400);
     const [txn] = await tx`
       INSERT INTO transactions (user_id, type, title, amount, wallet, status)
@@ -506,8 +538,8 @@ async function withdraw(req: ApiRequest): Promise<ApiResponse> {
   if (res.status === "failed") {
     // Explicit rejection → refund; nothing left the account.
     await sql.begin(async (tx) => {
-      if (walletKind === "sales") await tx`UPDATE users SET sales = sales + ${amount} WHERE id = ${uid}`;
-      else await tx`UPDATE users SET engagement = engagement + ${amount} WHERE id = ${uid}`;
+      const col = sql(walletKind);
+      await tx`UPDATE users SET ${col} = ${col} + ${amount} WHERE id = ${uid}`;
       await tx`UPDATE payouts SET status = 'REJECTED', provider_status = ${res.raw} WHERE id = ${reserved.payoutId}`;
       await tx`DELETE FROM transactions WHERE id = ${reserved.txId}`;
     });
@@ -536,8 +568,8 @@ async function settlePayout(transferId: string): Promise<{ status: string; raw?:
     if (p.tx_id) await sql`UPDATE transactions SET status = 'completed' WHERE id = ${p.tx_id}`;
   } else if (res.status === "failed") {
     await sql.begin(async (tx) => {
-      if (p.wallet === "sales") await tx`UPDATE users SET sales = sales + ${num(p.amount)} WHERE id = ${p.user_id}`;
-      else await tx`UPDATE users SET engagement = engagement + ${num(p.amount)} WHERE id = ${p.user_id}`;
+      const col = sql(p.wallet === "sales" ? "sales" : p.wallet === "referral" ? "referral" : "engagement");
+      await tx`UPDATE users SET ${col} = ${col} + ${num(p.amount)} WHERE id = ${p.user_id}`;
       await tx`UPDATE payouts SET status = 'REJECTED', provider_status = ${res.raw} WHERE id = ${p.id}`;
       if (p.tx_id) await tx`DELETE FROM transactions WHERE id = ${p.tx_id}`;
     });
@@ -933,8 +965,8 @@ async function adminPayoutAction(req: ApiRequest): Promise<ApiResponse> {
     });
   } else if (action === "reject") {
     await sql.begin(async (tx) => {
-      if (p.wallet === "sales") await tx`UPDATE users SET sales = sales + ${num(p.amount)} WHERE id = ${p.user_id}`;
-      else await tx`UPDATE users SET engagement = engagement + ${num(p.amount)} WHERE id = ${p.user_id}`;
+      const col = sql(p.wallet === "sales" ? "sales" : p.wallet === "referral" ? "referral" : "engagement");
+      await tx`UPDATE users SET ${col} = ${col} + ${num(p.amount)} WHERE id = ${p.user_id}`;
       await tx`UPDATE payouts SET status = 'REJECTED', provider_status = 'manual' WHERE id = ${id}`;
       if (p.tx_id) await tx`DELETE FROM transactions WHERE id = ${p.tx_id}`;
     });

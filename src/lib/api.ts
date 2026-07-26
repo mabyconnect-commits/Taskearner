@@ -72,6 +72,9 @@ export interface ServerUser {
   engagement: number;
   sales: number;
   deposit: number;
+  referral: number;
+  referralPending: number;
+  referralCount: number;
   completed: { tasks: string[]; posts: string[] };
   cooldowns: Record<string, number>;
   bank: { bankName: string; accountNumber: string; accountName: string } | null;

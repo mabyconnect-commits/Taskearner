@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Sheet } from "@/components/ui/Sheet";
 import { api } from "@/lib/api";
 import { useStore, WithdrawReceipt as Receipt } from "@/store/useStore";
-import { SALES_WITHDRAW_MIN, planById, withdrawFee, withdrawNet, WITHDRAW_TAX_RATE, WITHDRAW_VAT } from "@/lib/data";
+import { SALES_WITHDRAW_MIN, REFERRAL_WITHDRAW_MIN, planById, withdrawFee, withdrawNet, WITHDRAW_TAX_RATE, WITHDRAW_VAT } from "@/lib/data";
 import { WithdrawReceipt } from "@/components/WithdrawReceipt";
 import { formatNaira, timeAgo, maskAccount, maskName } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
@@ -15,16 +15,16 @@ const BANKS = ["Access Bank", "GTBank", "Zenith Bank", "UBA", "First Bank", "Kud
 
 export default function WalletPage() {
   const toast = useToast();
-  const { engagement, sales, bank, addBank, withdraw, transactions, plan } = useStore();
-  const [tab, setTab] = useState<"engagement" | "sales">("engagement");
+  const { engagement, sales, referral, bank, addBank, withdraw, transactions, plan } = useStore();
+  const [tab, setTab] = useState<"engagement" | "sales" | "referral">("engagement");
   const [bankSheet, setBankSheet] = useState(false);
   const [amt, setAmt] = useState("");
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
 
-  const balance = tab === "engagement" ? engagement : sales;
-  // Engagement minimum depends on the active plan; sales is flat for all plans.
-  const minWithdraw = tab === "sales" ? SALES_WITHDRAW_MIN : planById(plan).minWithdraw;
+  const balance = tab === "engagement" ? engagement : tab === "referral" ? referral : sales;
+  // Engagement minimum depends on the active plan; sales & referral are flat.
+  const minWithdraw = tab === "sales" ? SALES_WITHDRAW_MIN : tab === "referral" ? REFERRAL_WITHDRAW_MIN : planById(plan).minWithdraw;
   const amtNum = Number(amt) || 0;
   const fee = amtNum > 0 ? withdrawFee(amtNum) : 0;
   const net = amtNum > 0 ? withdrawNet(amtNum) : 0;
@@ -68,16 +68,16 @@ export default function WalletPage() {
 
       {/* wallet tabs */}
       <div className="mt-5 flex rounded-2xl bg-slate-100 p-1.5 dark:bg-white/5">
-        {(["engagement", "sales"] as const).map((t) => (
+        {(["engagement", "sales", "referral"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={cn(
-              "flex-1 rounded-xl py-3 text-sm font-bold capitalize transition",
+              "flex-1 rounded-xl py-3 text-xs font-bold capitalize transition sm:text-sm",
               tab === t ? "bg-brand-500 text-slate-900 shadow" : "text-slate-500",
             )}
           >
-            {t} wallet
+            {t}
           </button>
         ))}
       </div>

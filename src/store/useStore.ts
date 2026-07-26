@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { PlanId, planById, planDailyMax, SALES_WITHDRAW_MIN, COOLDOWN_MS, withdrawFee, withdrawNet } from "@/lib/data";
+import { PlanId, planById, planDailyMax, SALES_WITHDRAW_MIN, REFERRAL_WITHDRAW_MIN, COOLDOWN_MS, withdrawFee, withdrawNet } from "@/lib/data";
 import { api, ApiError, getToken, setToken, ServerUser } from "@/lib/api";
 
 export type TxType = "voice" | "word" | "task" | "post" | "fund" | "withdraw" | "plan" | "commission" | "bill";
@@ -11,7 +11,7 @@ export interface WithdrawReceipt {
   amount: number; // gross
   fee: number;
   net: number;
-  wallet: "engagement" | "sales";
+  wallet: "engagement" | "sales" | "referral";
   bankName: string;
   accountNumber: string;
   accountName: string;
@@ -25,7 +25,7 @@ export interface Transaction {
   type: TxType;
   title: string;
   amount: number;
-  wallet: "engagement" | "sales" | "deposit";
+  wallet: "engagement" | "sales" | "deposit" | "referral";
   status?: string;
   ts: number;
 }
@@ -58,6 +58,9 @@ interface State {
   engagement: number;
   sales: number;
   deposit: number;
+  referral: number;
+  referralPending: number;
+  referralCount: number;
   bank: Bank | null;
   socialLinked: boolean;
   transactions: Transaction[];
@@ -81,7 +84,7 @@ interface State {
   fund: (amount: number) => Promise<Result>;
   verifyFund: (reference: string) => Promise<Result>;
   reconcileDeposits: () => Promise<void>;
-  withdraw: (wallet: "engagement" | "sales", amount: number) => Promise<Result>;
+  withdraw: (wallet: "engagement" | "sales" | "referral", amount: number) => Promise<Result>;
   activatePlan: (id: PlanId) => Promise<Result>;
   addBank: (b: Bank) => Promise<Result>;
   linkSocial: () => Promise<Result>;
@@ -122,6 +125,9 @@ export const useStore = create<State>()(
           engagement: user.engagement,
           sales: user.sales,
           deposit: user.deposit,
+          referral: user.referral ?? 0,
+          referralPending: user.referralPending ?? 0,
+          referralCount: user.referralCount ?? 0,
           bank: user.bank,
           completedTasks: user.completed?.tasks ?? [],
           completedPosts: user.completed?.posts ?? [],
@@ -154,6 +160,9 @@ export const useStore = create<State>()(
         engagement: 0,
         sales: 0,
         deposit: 0,
+        referral: 0,
+        referralPending: 0,
+        referralCount: 0,
         bank: null,
         socialLinked: false,
         transactions: [],
@@ -372,14 +381,14 @@ export const useStore = create<State>()(
           }
           const s = get();
           if (!s.bank) return { ok: false, msg: "Add a payout bank account first." };
-          const bal = wallet === "engagement" ? s.engagement : s.sales;
-          const min = wallet === "sales" ? SALES_WITHDRAW_MIN : planById(s.plan).minWithdraw;
+          const bal = wallet === "engagement" ? s.engagement : wallet === "referral" ? s.referral : s.sales;
+          const min = wallet === "sales" ? SALES_WITHDRAW_MIN : wallet === "referral" ? REFERRAL_WITHDRAW_MIN : planById(s.plan).minWithdraw;
           if (amount < min) return { ok: false, msg: `Minimum withdrawal is ₦${min.toLocaleString()}.` };
           if (amount > bal) return { ok: false, msg: "Insufficient balance in this wallet." };
           // 3.5% tax + ₦50 VAT come off the payout; wallet is debited the gross.
           const fee = withdrawFee(amount);
           const net = withdrawNet(amount);
-          const reference = `WD-${wallet === "sales" ? "S" : "E"}-${Date.now()}-${Math.floor(Math.random() * 90000 + 10000)}`;
+          const reference = `WD-${wallet === "sales" ? "S" : wallet === "referral" ? "R" : "E"}-${Date.now()}-${Math.floor(Math.random() * 90000 + 10000)}`;
           const t = tx("withdraw", `Withdrawal to ${s.bank!.bankName} · ₦${net.toLocaleString()} net (₦${fee.toLocaleString()} fee)`, -amount, wallet);
           t.status = "pending";
           set((st) => ({

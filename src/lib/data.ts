@@ -118,6 +118,11 @@ export function planById(id: PlanId): Plan {
 export const WITHDRAW_MIN = 45000; // engagement wallet (fallback / highest tier)
 export const SALES_WITHDRAW_MIN = 1000; // sales/affiliate wallet — flat for all plans
 
+// Referral wallet: ₦250 per signup, min withdrawal (mirror api/_lib/plans.ts)
+export const REFERRAL_BONUS = 250;
+export const REFERRAL_CONFIRM_TASKS = 25;
+export const REFERRAL_WITHDRAW_MIN = 5000;
+
 // Taxes & fees (mirror api/_lib/plans.ts)
 export const DEPOSIT_TAX_RATE = 0.08; // 8% added on top of the funded amount
 export const WITHDRAW_TAX_RATE = 0.035; // 3.5% deducted from every withdrawal

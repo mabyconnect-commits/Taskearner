@@ -136,6 +136,11 @@ export async function ensureSchema(): Promise<void> {
     await sql`ALTER TABLE payouts ADD COLUMN IF NOT EXISTS provider_status text NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE payouts ADD COLUMN IF NOT EXISTS tx_id uuid`;
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily jsonb NOT NULL DEFAULT '{}'::jsonb`;
+    // Referral wallet: available (withdrawable) balance of confirmed ₦250 bonuses.
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS referral numeric(14,2) NOT NULL DEFAULT 0`;
+    // Per-referral ₦250 signup bonus + its state ('pending' → 'available').
+    await sql`ALTER TABLE referrals ADD COLUMN IF NOT EXISTS bonus numeric(14,2) NOT NULL DEFAULT 0`;
+    await sql`ALTER TABLE referrals ADD COLUMN IF NOT EXISTS bonus_status text NOT NULL DEFAULT 'pending'`;
 
     // Admin-managed daily tasks
     await sql`

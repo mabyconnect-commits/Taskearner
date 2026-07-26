@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Copy, Check, Share2, MessageCircle, Info, Users, Coins } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Copy, Check, Share2, MessageCircle, Info, Users, Coins, Gift } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { Drawer } from "@/components/Drawer";
 import { useStore } from "@/store/useStore";
-import { PLANS } from "@/lib/data";
+import { PLANS, REFERRAL_BONUS, REFERRAL_CONFIRM_TASKS } from "@/lib/data";
 import { formatNaira, timeAgo } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import { planById } from "@/lib/data";
@@ -11,7 +12,8 @@ import { Menu } from "lucide-react";
 
 export default function Sales() {
   const toast = useToast();
-  const { username, sales, referrals, simulateReferral, mode } = useStore();
+  const nav = useNavigate();
+  const { username, sales, referral, referralPending, referrals, simulateReferral, mode } = useStore();
   const [copied, setCopied] = useState(false);
   const [drawer, setDrawer] = useState(false);
 
@@ -80,7 +82,33 @@ export default function Sales() {
         </div>
         <p className="mt-4 text-xs font-bold uppercase tracking-widest text-white/50">Total Sales Commission</p>
         <p className="mt-1 font-display text-4xl font-extrabold">{formatNaira(sales)}</p>
-        <p className="mt-1 text-sm text-white/60">Lifetime earned: {formatNaira(sales)}</p>
+        <p className="mt-1 text-sm text-white/60">Paid when a referral activates a plan.</p>
+      </div>
+
+      {/* referral wallet — ₦250 per signup */}
+      <div className="card mt-4 p-5">
+        <p className="flex items-center gap-2 font-display text-lg font-bold">
+          <Gift className="h-5 w-5 text-brand-600" /> Referral Wallet
+        </p>
+        <p className="mt-0.5 text-sm text-slate-400">{formatNaira(REFERRAL_BONUS)} for every person who signs up with your link.</p>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="rounded-2xl bg-emerald-50 p-4 dark:bg-emerald-500/10">
+            <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Available</p>
+            <p className="font-display text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{formatNaira(referral)}</p>
+          </div>
+          <div className="rounded-2xl bg-amber-50 p-4 dark:bg-amber-500/10">
+            <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">Pending</p>
+            <p className="font-display text-2xl font-extrabold text-amber-600 dark:text-amber-400">{formatNaira(referralPending)}</p>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+          Pending earnings become <b>Available</b> to withdraw once a referral completes {REFERRAL_CONFIRM_TASKS} Voice/Sponsored activities — or instantly when they upgrade to any paid plan.
+        </p>
+        {referral > 0 && (
+          <button onClick={() => nav("/wallet")} className="btn-primary mt-3 w-full py-3">
+            <Coins className="h-4 w-4" /> Withdraw referral earnings
+          </button>
+        )}
       </div>
 
       {/* referral link */}
