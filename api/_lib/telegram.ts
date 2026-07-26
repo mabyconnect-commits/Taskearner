@@ -78,6 +78,20 @@ export async function sendToSupport(text: string, keyboard?: InlineButton[][]): 
   return r?.ok && r.result?.message_id ? Number(r.result.message_id) : null;
 }
 
+// Forward a user's payment-proof photo into the ops group (reusing the file_id
+// Telegram gave us for the incoming photo). Returns the group message id.
+export async function sendPhotoToSupport(fileId: string, caption: string, keyboard?: InlineButton[][]): Promise<number | null> {
+  if (!ENV.TELEGRAM_SUPPORT_GROUP_ID) return null;
+  const r = await call("sendPhoto", {
+    chat_id: ENV.TELEGRAM_SUPPORT_GROUP_ID,
+    photo: fileId,
+    caption: caption.slice(0, 1024),
+    parse_mode: "HTML",
+    ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
+  });
+  return r?.ok && r.result?.message_id ? Number(r.result.message_id) : null;
+}
+
 // The persistent bottom-of-menu buttons (Open App / Channel / Group).
 export function linkButtons(): InlineButton[][] {
   return [

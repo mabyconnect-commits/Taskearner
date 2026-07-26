@@ -10,7 +10,7 @@ import { ENV } from "./_lib/env.js";
 import { listBanks, resolveAccount } from "./_lib/flutterwave.js";
 import {
   botEnabled, sendMessage as tgSend, editMessage as tgEdit, answerCallback as tgAnswer,
-  sendToSupport, mainMenu, linkButtons, setWebhook, getWebhookInfo, setMyCommands, setMenuButton,
+  sendToSupport, sendPhotoToSupport, mainMenu, linkButtons, setWebhook, getWebhookInfo, setMyCommands, setMenuButton,
 } from "./_lib/telegram.js";
 
 function formatNgn(n: number): string {
@@ -1119,20 +1119,38 @@ async function setBotState(chatId: string, state: string, data: any = {}): Promi
 
 const backToMenu = () => [[{ text: "⬅️ Back to menu", callback_data: "main_menu" }]];
 
-// Escalate to the ops group and record the ticket. Returns the ticket id.
-async function escalateTicket(kind: "deposit" | "withdrawal", chatId: string, uname: string, reference: string, details: string): Promise<number> {
+// Escalate to the ops group and record the ticket. Forwards the user's payment
+// proof photo when provided. Returns the ticket id.
+async function escalateTicket(
+  kind: "deposit" | "withdrawal",
+  chatId: string,
+  uname: string,
+  reference: string,
+  details: string,
+  opts: { email?: string; photoFileId?: string } = {},
+): Promise<number> {
+  const email = opts.email || "";
   const [t] = await sql`
-    INSERT INTO support_tickets (kind, chat_id, tg_username, reference, details)
-    VALUES (${kind}, ${chatId}, ${uname}, ${reference}, ${details}) RETURNING id`;
+    INSERT INTO support_tickets (kind, chat_id, tg_username, email, reference, details)
+    VALUES (${kind}, ${chatId}, ${uname}, ${email}, ${reference}, ${details}) RETURNING id`;
   const label = kind === "deposit" ? "Deposit not credited" : "Withdrawal not received";
   const body =
     `🎫 <b>Ticket #T${t.id}</b> — ${label}\n` +
     `From: ${uname} (chat <code>${chatId}</code>)\n` +
+    (email ? `Email: <code>${email}</code>\n` : "") +
     `Ref: <code>${reference || "—"}</code>\n\n${details}\n\n` +
     `↩️ <i>Reply to this message with</i> <b>done</b> / <b>success</b> / <b>paid</b> <i>to resolve and auto-notify the user.</i>`;
-  const gid = await sendToSupport(body);
+  const gid = opts.photoFileId
+    ? await sendPhotoToSupport(opts.photoFileId, body)
+    : await sendToSupport(body);
   if (gid) await sql`UPDATE support_tickets SET group_msg_id = ${gid} WHERE id = ${t.id}`;
   return t.id as number;
+}
+
+// How many deposit/withdrawal tickets for this chat are still open (unresolved).
+async function openTicketCount(chatId: string, kind: "deposit" | "withdrawal"): Promise<number> {
+  const [r] = await sql`SELECT count(*)::int AS n FROM support_tickets WHERE chat_id = ${chatId} AND kind = ${kind} AND status = 'open'`;
+  return r?.n ?? 0;
 }
 
 // Deposit help: users normally don't have a TE… reference, so accept the email
@@ -1178,10 +1196,64 @@ async function botDepositByEmail(chatId: string, uname: string, email: string): 
     await tgSend(chatId, `✅ Sorted! I confirmed your payment and credited <b>${formatNgn(credited)}</b> to your wallet. Reopen the app to see it. 🎉`, backToMenu());
     return;
   }
+
+  // Still pending → decide whether we may escalate (don't spam the ops group
+  // with the same deposit twice).
+  const open = await openTicketCount(chatId, "deposit");
+  if (open >= 2) {
+    await tgSend(chatId, `⏳ Your deposit has already been escalated <b>twice</b> and is under review by our payments team. Please hold on — you'll be notified here as soon as it's resolved.`, backToMenu());
+    return;
+  }
+  if (open === 1) {
+    // Already forwarded once — don't forward again automatically. Offer a
+    // single re-send, but only if they have a corrected payment proof.
+    await tgSend(chatId,
+      `📌 Your deposit is <b>already with our payments team</b> and being reviewed — you'll be notified here once it's sorted. 🙏\n\nOnly if your <b>payment proof was wrong or unclear</b>, you can send a corrected one:`,
+      [[{ text: "🔁 Send corrected payment proof", callback_data: "deposit_reproof" }], ...backToMenu()]);
+    return;
+  }
+
+  // First escalation — ask for the payment-proof screenshot before forwarding.
   const total = stillPending.reduce((s, p) => s + num(p.amount), 0);
-  const id = await escalateTicket("deposit", chatId, uname, stillPending.map((p) => p.reference).join(", "),
-    `User <b>${email}</b> has ${stillPending.length} pending deposit(s) totalling ${formatNgn(total)} the gateway hasn't confirmed. Please verify and reply done.`);
-  await tgSend(chatId, `I found <b>${stillPending.length} pending deposit(s)</b> totalling ${formatNgn(total)}, but the gateway hasn't confirmed payment yet. I've opened <b>ticket #T${id}</b> — our team will verify and I'll message you here the moment it's credited.`, backToMenu());
+  const refs = stillPending.map((p) => p.reference).join(", ");
+  await setBotState(chatId, "await_deposit_proof", { email, refs, total, count: stillPending.length });
+  await tgSend(chatId,
+    `I found <b>${stillPending.length} pending deposit(s)</b> totalling ${formatNgn(total)} the gateway hasn't confirmed yet.\n\n📸 Please send a <b>screenshot of your payment</b> (payment proof) and I'll forward it to our team right away.\n\n<i>No screenshot? Type</i> <b>skip</b>.`,
+    backToMenu());
+}
+
+// Escalate a deposit with the user's payment proof (photo) or text-only.
+async function botDepositProof(chatId: string, uname: string, msg: any, data: any): Promise<void> {
+  await setBotState(chatId, "idle");
+  const photoFileId = Array.isArray(msg.photo) && msg.photo.length ? String(msg.photo[msg.photo.length - 1].file_id) : "";
+  const typed = String(msg.text || msg.caption || "").trim();
+
+  // Guard the 2-forward maximum at submit time too.
+  if (await openTicketCount(chatId, "deposit") >= 2) {
+    await tgSend(chatId, `⏳ This deposit has already been escalated twice and is under review. Please wait — you'll be notified here.`, backToMenu());
+    return;
+  }
+
+  const email = data?.email || "";
+  let refs = data?.refs || "";
+  let total = data?.total || 0;
+  // Prefer a fresh lookup from the email (authoritative), so the ticket always
+  // reflects the user's currently-pending deposits.
+  if (email) {
+    const [u] = await sql`SELECT id FROM users WHERE lower(email) = ${email}`;
+    if (u) {
+      const pend = await sql`SELECT reference, amount FROM payments WHERE user_id = ${u.id} AND purpose = 'fund' AND status = 'pending' AND created_at > now() - interval '7 days'`;
+      if (pend.length) {
+        refs = pend.map((p: any) => p.reference).join(", ");
+        total = pend.reduce((s: number, p: any) => s + num(p.amount), 0);
+      }
+    }
+  }
+
+  const proofLine = photoFileId ? "🧾 Payment proof attached." : (/^skip$/i.test(typed) ? "No payment proof provided." : (typed ? `User note: ${typed}` : "No payment proof provided."));
+  const details = `${data?.reproof ? "🔁 <b>UPDATED payment proof.</b>\n" : ""}User <b>${email || "(unknown)"}</b> has pending deposit(s) totalling ${formatNgn(total)} the gateway hasn't confirmed.\n${proofLine}\nPlease verify and reply done.`;
+  const id = await escalateTicket("deposit", chatId, uname, refs, details, { email, photoFileId });
+  await tgSend(chatId, `✅ Sent to our payments team${photoFileId ? " with your proof" : ""} — <b>ticket #T${id}</b>. Please hold on; you'll be notified here the moment it's credited.`, backToMenu());
 }
 
 // Fallback: auto-fix a deposit by its TE… reference.
@@ -1248,8 +1320,15 @@ async function botWithdrawByEmail(chatId: string, uname: string, email: string):
     await tgSend(chatId, `Your last withdrawal was declined and the <b>${formatNgn(num(p.amount))}</b> was refunded to your wallet. You can request it again from the app.`, backToMenu());
     return;
   }
+  // Don't re-forward a withdrawal that's already with the team.
+  const open = await openTicketCount(chatId, "withdrawal");
+  if (open >= 1) {
+    await tgSend(chatId, `📌 Your withdrawal of <b>${formatNgn(num(p.amount))}</b> is <b>already with our payments team</b> and being reviewed. Please hold on — you'll be notified here once it's paid. 🙏`, backToMenu());
+    return;
+  }
   const id = await escalateTicket("withdrawal", chatId, uname, p.reference,
-    `User <b>${email}</b> latest payout ${formatNgn(num(p.amount))} to ${p.bank_name} (${p.account_number}) is <b>${p.status}</b>. Please verify/pay and reply done.`);
+    `User <b>${email}</b> latest payout ${formatNgn(num(p.amount))} to ${p.bank_name} (${p.account_number}) is <b>${p.status}</b>. Please verify/pay and reply done.`,
+    { email });
   await tgSend(chatId, `Your latest withdrawal of <b>${formatNgn(num(p.amount))}</b> to ${p.bank_name} is still <b>${String(p.status).toLowerCase()}</b>. I've opened <b>ticket #T${id}</b> and escalated it — I'll message you here the moment it's paid.`, backToMenu());
 }
 
@@ -1291,9 +1370,14 @@ async function botWithdrawByRef(chatId: string, uname: string, ref: string): Pro
 // Apply the real in-app effect when staff resolve a ticket (trusted ops action).
 async function applyTicketResolution(t: any): Promise<void> {
   try {
-    if (t.kind === "deposit" && t.reference) {
-      const [p] = await sql`SELECT * FROM payments WHERE reference = ${t.reference} AND purpose = 'fund'`;
-      if (p && p.status !== "paid") await creditDeposit(p.reference); // idempotent credit
+    if (t.kind === "deposit") {
+      // Credit exactly the references that were escalated (comma-joined). Staff
+      // replying "done" means they verified the payment(s).
+      const refs = String(t.reference || "").split(",").map((s) => s.trim()).filter(Boolean);
+      for (const ref of refs) {
+        const [p] = await sql`SELECT * FROM payments WHERE reference = ${ref} AND purpose = 'fund'`;
+        if (p && p.status !== "paid") await creditDeposit(p.reference); // idempotent
+      }
     } else if (t.kind === "withdrawal" && t.reference) {
       const [p] = await sql`SELECT * FROM payouts WHERE reference = ${t.reference}`;
       if (p && p.status !== "PAID" && p.status !== "REJECTED") {
@@ -1310,7 +1394,7 @@ async function applyTicketResolution(t: any): Promise<void> {
 
 // A staff message inside the ops group: a reply to a ticket resolves it.
 async function botHandleGroupMessage(msg: any): Promise<void> {
-  const text = String(msg.text || "").trim();
+  const text = String(msg.text || msg.caption || "").trim();
   if (/^\/id\b/.test(text)) {
     await tgSend(msg.chat.id, `chat_id: <code>${msg.chat.id}</code>`);
     return;
@@ -1348,6 +1432,15 @@ async function botHandleCallback(cq: any): Promise<void> {
   } else if (data === "withdrawal_issue") {
     await setBotState(chatId, "await_withdraw_ref");
     await tgSend(chatId, "💸 <b>Withdrawal not received</b>\n\nSend me the <b>email you signed up with</b> on the app. I'll check your latest withdrawal and confirm its status.", backToMenu());
+  } else if (data === "deposit_reproof") {
+    // Allow a single second forward — but only with a corrected proof.
+    if (await openTicketCount(chatId, "deposit") >= 2) {
+      await tgSend(chatId, "⏳ This deposit has already been escalated twice and is under review. Please wait — you'll be notified here.", backToMenu());
+    } else {
+      const [last] = await sql`SELECT email, reference FROM support_tickets WHERE chat_id = ${chatId} AND kind = 'deposit' AND status = 'open' ORDER BY created_at DESC LIMIT 1`;
+      await setBotState(chatId, "await_deposit_proof", { reproof: true, email: last?.email || "", refs: last?.reference || "" });
+      await tgSend(chatId, "🔁 Okay — send your <b>updated payment proof</b> screenshot now and I'll forward it to the team.", backToMenu());
+    }
   } else if (data === "faq_menu") {
     await tgEdit(chatId, cq.message.message_id, FAQ_TEXT, [...backToMenu(), ...linkButtons()]);
   } else if (data === "main_menu") {
@@ -1396,6 +1489,10 @@ async function botHandleMessage(msg: any): Promise<void> {
     return;
   }
   const st = await getBotState(chatId);
+  if (st.state === "await_deposit_proof") {
+    await botDepositProof(chatId, uname, msg, st.data);
+    return;
+  }
   if (st.state === "await_deposit_ref") {
     await botHandleDeposit(chatId, uname, text);
     return;

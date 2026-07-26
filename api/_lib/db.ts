@@ -186,6 +186,7 @@ export async function ensureSchema(): Promise<void> {
         kind         text NOT NULL,
         chat_id      text NOT NULL,
         tg_username  text NOT NULL DEFAULT '',
+        email        text NOT NULL DEFAULT '',
         reference    text NOT NULL DEFAULT '',
         details      text NOT NULL DEFAULT '',
         status       text NOT NULL DEFAULT 'open',
@@ -193,7 +194,9 @@ export async function ensureSchema(): Promise<void> {
         created_at   timestamptz NOT NULL DEFAULT now()
       );
     `;
+    await sql`ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS email text NOT NULL DEFAULT ''`;
     await sql`CREATE INDEX IF NOT EXISTS idx_ticket_groupmsg ON support_tickets(group_msg_id);`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_ticket_chat_kind ON support_tickets(chat_id, kind, status);`;
 
     // Seed default tasks once (so the app works before an admin adds any)
     const [tc] = await sql`SELECT count(*)::int AS n FROM tasks`;
