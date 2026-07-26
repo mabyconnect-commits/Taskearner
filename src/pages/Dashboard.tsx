@@ -11,6 +11,7 @@ import { Layout } from "@/components/Layout";
 import { Drawer } from "@/components/Drawer";
 import { WalletCards } from "@/components/WalletCards";
 import { Sheet } from "@/components/ui/Sheet";
+import { TelegramPrompt, TelegramCard } from "@/components/JoinTelegram";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 
@@ -78,6 +79,7 @@ export default function Dashboard() {
   return (
     <Layout>
       <Drawer open={drawer} onClose={() => setDrawer(false)} />
+      <TelegramPrompt />
 
       {/* top bar */}
       <div className="flex items-center gap-3">
@@ -160,6 +162,9 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
+
+      {/* join telegram */}
+      <TelegramCard />
 
       {/* next step to start earning */}
       {nextStep && (
