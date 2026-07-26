@@ -26,7 +26,7 @@ export interface Plan {
 }
 
 export const PLANS: Record<PlanId, Plan> = {
-  free: { id: "free", name: "Free", price: 0, commission: 0, perVoice: 0, perWord: 0, perPost: 0, perTask: 0, daily: { voice: 0, word: 0, task: 0, post: 0 }, minWithdraw: 8000 },
+  free: { id: "free", name: "Free", price: 0, commission: 0, perVoice: 40, perWord: 30, perPost: 25, perTask: 25, daily: { voice: 1, word: 1, task: 1, post: 1 }, minWithdraw: 8000 },
   lite: { id: "lite", name: "Voice Lite", price: 1500, commission: 850, perVoice: 100, perWord: 60, perPost: 50, perTask: 30, daily: { voice: 1, word: 1, task: 1, post: 1 }, minWithdraw: 8000 },
   starter: { id: "starter", name: "Voice Starter", price: 3000, commission: 1875, perVoice: 220, perWord: 140, perPost: 110, perTask: 60, daily: { voice: 1, word: 1, task: 1, post: 1 }, minWithdraw: 14500 },
   pro: { id: "pro", name: "Voice Pro", price: 5000, commission: 3100, perVoice: 380, perWord: 240, perPost: 180, perTask: 100, daily: { voice: 1, word: 1, task: 1, post: 1 }, minWithdraw: 22000 },

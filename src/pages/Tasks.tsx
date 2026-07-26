@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Check, Loader2, Instagram, PlaySquare, Star, ClipboardList, Send, Crown } from "lucide-react";
+import { Check, Loader2, Instagram, PlaySquare, Star, ClipboardList, Send } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useStore } from "@/store/useStore";
@@ -14,7 +13,6 @@ const iconFor = (c: string) =>
   c === "social" ? Instagram : c === "watch" ? PlaySquare : c === "review" ? Star : c === "survey" ? ClipboardList : Send;
 
 export default function Tasks() {
-  const nav = useNavigate();
   const toast = useToast();
   const { plan, completedTasks, earnActivity, mode, dailyUsed } = useStore();
   const p = planById(plan);
@@ -35,8 +33,6 @@ export default function Tasks() {
       .catch(() => { /* keep fallback */ });
     return () => { alive = false; };
   }, [mode]);
-
-  if (plan === "free") return <Locked nav={nav} />;
 
   const doTask = (t: DailyTask) => {
     if (completedTasks.includes(t.id) || busy || capReached) return;
@@ -162,18 +158,3 @@ export default function Tasks() {
   );
 }
 
-function Locked({ nav }: { nav: ReturnType<typeof useNavigate> }) {
-  return (
-    <Layout hideNav>
-      <PageHeader title="Daily Tasks" to="/earn" />
-      <div className="card mt-10 flex flex-col items-center p-8 text-center">
-        <div className="grid h-20 w-20 place-items-center rounded-full bg-brand-100 dark:bg-brand-500/20">
-          <Crown className="h-10 w-10 text-brand-500" />
-        </div>
-        <h2 className="mt-4 font-display text-2xl font-extrabold">Activate a plan first</h2>
-        <p className="mt-1 text-slate-400">Daily tasks unlock with any lifetime plan.</p>
-        <button onClick={() => nav("/packages")} className="btn-primary mt-6 w-full py-4">View plans</button>
-      </div>
-    </Layout>
-  );
-}

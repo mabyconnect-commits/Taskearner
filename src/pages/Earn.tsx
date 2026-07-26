@@ -85,8 +85,8 @@ export default function Earn() {
           className="mb-4 flex w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-brand-500 to-brand-700 p-4 text-left text-white shadow-glow"
         >
           <div className="flex-1">
-            <p className="font-bold">Activate a plan to start earning</p>
-            <p className="text-sm text-white/75">Pay once, earn forever from every activity.</p>
+            <p className="font-bold">You're on the Free plan — earn ₦120/day</p>
+            <p className="text-sm text-white/75">Upgrade to earn much more from every activity.</p>
           </div>
           <ChevronRight className="h-5 w-5" />
         </button>

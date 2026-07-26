@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Volume2, Check, Crown, Play, Square, Loader2, X, HelpCircle } from "lucide-react";
+import { Volume2, Check, Play, Square, Loader2, X, HelpCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -34,7 +34,6 @@ export default function WordGame() {
   const current = words[round];
   const { supported, listening, transcript, start, stop, reset } = useSpeech(lang.code);
 
-  if (plan === "free") return <Locked nav={nav} />;
 
   const beginGame = () => {
     setLangSheet(false);
@@ -194,18 +193,3 @@ export default function WordGame() {
   );
 }
 
-function Locked({ nav }: { nav: ReturnType<typeof useNavigate> }) {
-  return (
-    <Layout hideNav>
-      <PageHeader title="Word Game" to="/earn" />
-      <div className="card mt-10 flex flex-col items-center p-8 text-center">
-        <div className="grid h-20 w-20 place-items-center rounded-full bg-brand-100 dark:bg-brand-500/20">
-          <Crown className="h-10 w-10 text-brand-600 dark:text-brand-300" />
-        </div>
-        <h2 className="mt-4 font-display text-2xl font-extrabold">Activate a plan first</h2>
-        <p className="mt-1 text-slate-400">The Word Game unlocks with any lifetime plan.</p>
-        <button onClick={() => nav("/packages")} className="btn-primary mt-6 w-full py-4">View plans</button>
-      </div>
-    </Layout>
-  );
-}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { Copy, Check, Share2, Crown, Loader2, Megaphone, X, Download, ImagePlus } from "lucide-react";
+import { Copy, Check, Share2, Loader2, Megaphone, X, Download, ImagePlus } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useStore } from "@/store/useStore";
@@ -36,7 +36,6 @@ export default function Sponsored() {
     return () => { alive = false; };
   }, [mode]);
 
-  if (plan === "free") return <Locked nav={nav} />;
 
   const copy = (post: SponsoredPost) => {
     navigator.clipboard?.writeText(post.copy).catch(() => {});
@@ -262,18 +261,3 @@ function AdvertiseSheet({
   );
 }
 
-function Locked({ nav }: { nav: ReturnType<typeof useNavigate> }) {
-  return (
-    <Layout hideNav>
-      <PageHeader title="Sponsored Posts" to="/earn" />
-      <div className="card mt-10 flex flex-col items-center p-8 text-center">
-        <div className="grid h-20 w-20 place-items-center rounded-full bg-brand-100 dark:bg-brand-500/20">
-          <Crown className="h-10 w-10 text-brand-500" />
-        </div>
-        <h2 className="mt-4 font-display text-2xl font-extrabold">Activate a plan first</h2>
-        <p className="mt-1 text-slate-400">Sponsored posts unlock with any lifetime plan.</p>
-        <button onClick={() => nav("/packages")} className="btn-primary mt-6 w-full py-4">View plans</button>
-      </div>
-    </Layout>
-  );
-}

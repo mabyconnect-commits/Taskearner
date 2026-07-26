@@ -269,8 +269,7 @@ export const useStore = create<State>()(
           }
           // offline
           const s = get();
-          if (s.plan === "free") return { ok: false, msg: "Activate a plan to start earning" };
-          const p = planById(s.plan);
+          const p = planById(s.plan); // free plan earns too now
           const now = Date.now();
 
           // daily usage (reset on new day)

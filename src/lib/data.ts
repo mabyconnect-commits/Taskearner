@@ -102,13 +102,13 @@ export const FREE_PLAN: Plan = {
   name: "Free",
   price: 0,
   commission: 0,
-  perVoice: 0,
-  perWord: 0,
-  perPost: 0,
-  perTask: 0,
-  daily: { voice: 0, word: 0, task: 0, post: 0 },
+  perVoice: 40,
+  perWord: 30,
+  perPost: 25,
+  perTask: 25,
+  daily: { voice: 1, word: 1, task: 1, post: 1 },
   minWithdraw: 8000,
-  tagline: "Activate a plan to start earning.",
+  tagline: "Earn ₦120 daily free — upgrade to earn more.",
 };
 
 export function planById(id: PlanId): Plan {

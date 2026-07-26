@@ -169,7 +169,7 @@ async function earn(req: ApiRequest): Promise<ApiResponse> {
   const amount = await sql.begin(async (tx) => {
     const [u] = await tx`SELECT * FROM users WHERE id = ${uid} FOR UPDATE`;
     if (!u) throw new HttpError("User not found", 404);
-    if (u.plan === "free") throw new HttpError("Activate a plan to start earning", 403);
+    // Free plan earns too (small daily cap) — no plan gate here anymore.
     const plan = planOf(u.plan);
 
     const now = Date.now();
@@ -1101,7 +1101,7 @@ async function adminSponsoredAction(req: ApiRequest): Promise<ApiResponse> {
 
 const FAQ_TEXT =
   "<b>❓ TaskEarner — Quick Help</b>\n\n" +
-  "<b>How do I earn?</b>\nActivate a plan, then open <b>Earn</b> and complete your daily activities (Voice, Word, Task, Sponsored post). Each activity pays once per day.\n\n" +
+  "<b>How do I earn?</b>\nOpen <b>Earn</b> and complete your daily activities (Voice, Word, Task, Sponsored post). Each pays once per day. Free earns ₦120/day; upgrade a plan to earn more.\n\n" +
   "<b>How do I fund my wallet?</b>\nTap <b>Fund Wallet</b>, enter an amount and pay. Deposits reflect automatically once confirmed — reopen the app if it takes a minute.\n\n" +
   "<b>How do withdrawals work?</b>\nAdd your bank account under <b>Withdraw</b>, then request a payout. Most banks are paid automatically; a few are settled by hand within a short while.\n\n" +
   "<b>Deposit or withdrawal stuck?</b>\nTap the button below and send the email you signed up with — I'll check it live and fix it if I can.";
