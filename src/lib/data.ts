@@ -280,6 +280,7 @@ export interface DailyTask {
   title: string;
   detail: string;
   category: "social" | "survey" | "watch" | "review";
+  link?: string;
 }
 
 export const DAILY_TASKS: DailyTask[] = [
@@ -287,7 +288,7 @@ export const DAILY_TASKS: DailyTask[] = [
   { id: "t2", title: "Watch a 30s promo video", detail: "Watch the full clip to unlock the reward.", category: "watch" },
   { id: "t3", title: "Rate our app 5 stars", detail: "Leave an honest review on the store.", category: "review" },
   { id: "t4", title: "Take a 2-minute survey", detail: "Tell us how you like to earn online.", category: "survey" },
-  { id: "t5", title: "Join our Telegram channel", detail: "Stay updated with new earning drops.", category: "social" },
+  { id: "t5", title: "Join our Telegram channel", detail: "Stay updated with new earning drops.", category: "social", link: "https://t.me/taskearning101" },
   { id: "t6", title: "Share the daily quote", detail: "Post today's motivation to your story.", category: "social" },
   { id: "t7", title: "Retweet the pinned post", detail: "Amplify Task Earner Africa to your followers.", category: "social" },
   { id: "t8", title: "Watch: How payouts work", detail: "Learn how withdrawals are processed.", category: "watch" },

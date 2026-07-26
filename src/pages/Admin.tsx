@@ -460,6 +460,9 @@ function TasksTab() {
                 <span className="text-xs font-semibold uppercase text-slate-400">{t.category}</span>
               </div>
               <p className="text-sm text-slate-400">{t.detail}</p>
+              {t.link
+                ? <a href={t.link} target="_blank" rel="noopener noreferrer" className="mt-1 block truncate text-xs font-medium text-brand-600">🔗 {t.link}</a>
+                : <p className="mt-1 text-xs text-amber-500">No link — tapping just credits. Delete &amp; re-add with a link to send users somewhere.</p>}
               <div className="mt-2 flex gap-2">
                 <button onClick={() => act(t.id, t.active ? "disable" : "enable")} disabled={busy === t.id} className="btn-ghost flex-1 py-2 text-sm">
                   <Power className="h-4 w-4" /> {t.active ? "Disable" : "Enable"}

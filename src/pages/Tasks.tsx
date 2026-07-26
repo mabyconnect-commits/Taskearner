@@ -22,6 +22,7 @@ export default function Tasks() {
   const taskUsed = Math.min(dailyUsed?.task ?? 0, taskCap);
   const capReached = taskUsed >= taskCap;
   const [busy, setBusy] = useState<string | null>(null);
+  const [armed, setArmed] = useState<string | null>(null);
   const [tab, setTab] = useState<"available" | "completed">("available");
   // Live tasks from the DB (admin-managed); fall back to bundled list offline.
   const [tasks, setTasks] = useState<DailyTask[]>(DAILY_TASKS);
@@ -39,12 +40,25 @@ export default function Tasks() {
 
   const doTask = (t: DailyTask) => {
     if (completedTasks.includes(t.id) || busy || capReached) return;
+    const link = (t.link || "").trim();
+
+    // If the task has a link, the FIRST tap opens it (Telegram, Instagram, the
+    // survey, etc.). The user completes it there, comes back, and taps again to
+    // claim. Without this, tapping used to silently credit and never open it.
+    if (link && armed !== t.id) {
+      window.open(link, "_blank", "noopener,noreferrer");
+      setArmed(t.id);
+      toast("Complete the task, then tap “Claim reward”.", "info");
+      return;
+    }
+
     setBusy(t.id);
     setTimeout(async () => {
       const res = await earnActivity("task", t.id);
       setBusy(null);
+      setArmed(null);
       toast(res.ok ? `Task done! +${formatNaira(res.amount ?? p.perTask)}` : res.msg, res.ok ? "success" : "error");
-    }, 1200);
+    }, link ? 400 : 1200);
   };
 
   const done = completedTasks.filter((id) => tasks.some((t) => t.id === id)).length;
@@ -130,9 +144,14 @@ export default function Tasks() {
                 <button
                   onClick={() => doTask(t)}
                   disabled={!!busy}
-                  className="btn-primary shrink-0 px-4 py-2.5 text-sm"
+                  className={cn(
+                    "shrink-0 px-4 py-2.5 text-sm",
+                    armed === t.id ? "btn bg-emerald-500 text-white" : "btn-primary",
+                  )}
                 >
-                  {busy === t.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Do it"}
+                  {busy === t.id ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : armed === t.id ? "Claim reward"
+                    : (t.link || "").trim() ? "Start task" : "Do it"}
                 </button>
               )}
             </div>

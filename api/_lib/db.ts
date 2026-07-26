@@ -196,19 +196,21 @@ export async function ensureSchema(): Promise<void> {
     const [tc] = await sql`SELECT count(*)::int AS n FROM tasks`;
     if (tc.n === 0) {
       const defaults = [
-        ["t1", "Follow Task Earner Africa on Instagram", "Tap follow and confirm your handle.", "social"],
-        ["t2", "Watch a 30s promo video", "Watch the full clip to unlock the reward.", "watch"],
-        ["t3", "Rate our app 5 stars", "Leave an honest review on the store.", "review"],
-        ["t4", "Take a 2-minute survey", "Tell us how you like to earn online.", "survey"],
-        ["t5", "Join our Telegram channel", "Stay updated with new earning drops.", "social"],
-        ["t6", "Share the daily quote", "Post today's motivation to your story.", "social"],
-        ["t7", "Retweet the pinned post", "Amplify Task Earner Africa to your followers.", "social"],
-        ["t8", "Watch: How payouts work", "Learn how withdrawals are processed.", "watch"],
+        ["t1", "Follow Task Earner Africa on Instagram", "Tap follow and confirm your handle.", "social", ""],
+        ["t2", "Watch a 30s promo video", "Watch the full clip to unlock the reward.", "watch", ""],
+        ["t3", "Rate our app 5 stars", "Leave an honest review on the store.", "review", ""],
+        ["t4", "Take a 2-minute survey", "Tell us how you like to earn online.", "survey", ""],
+        ["t5", "Join our Telegram channel", "Stay updated with new earning drops.", "social", "https://t.me/taskearning101"],
+        ["t6", "Share the daily quote", "Post today's motivation to your story.", "social", ""],
+        ["t7", "Retweet the pinned post", "Amplify Task Earner Africa to your followers.", "social", ""],
+        ["t8", "Watch: How payouts work", "Learn how withdrawals are processed.", "watch", ""],
       ];
-      for (const [id, title, detail, category] of defaults) {
-        await sql`INSERT INTO tasks (id, title, detail, category) VALUES (${id}, ${title}, ${detail}, ${category}) ON CONFLICT DO NOTHING`;
+      for (const [id, title, detail, category, link] of defaults) {
+        await sql`INSERT INTO tasks (id, title, detail, category, link) VALUES (${id}, ${title}, ${detail}, ${category}, ${link}) ON CONFLICT DO NOTHING`;
       }
     }
+    // Backfill the Telegram task link on existing databases that seeded it blank.
+    await sql`UPDATE tasks SET link = 'https://t.me/taskearning101' WHERE id = 't5' AND (link = '' OR link IS NULL)`;
     const [sc] = await sql`SELECT count(*)::int AS n FROM sponsored`;
     if (sc.n === 0) {
       const posts = [
