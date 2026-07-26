@@ -1101,7 +1101,7 @@ const FAQ_TEXT =
   "<b>How do I earn?</b>\nActivate a plan, then open <b>Earn</b> and complete your daily activities (Voice, Word, Task, Sponsored post). Each activity pays once per day.\n\n" +
   "<b>How do I fund my wallet?</b>\nTap <b>Fund Wallet</b>, enter an amount and pay. Deposits reflect automatically once confirmed — reopen the app if it takes a minute.\n\n" +
   "<b>How do withdrawals work?</b>\nAdd your bank account under <b>Withdraw</b>, then request a payout. Most banks are paid automatically; a few are settled by hand within a short while.\n\n" +
-  "<b>Deposit or withdrawal stuck?</b>\nUse the buttons below with your reference and I'll check it live and fix it if I can.";
+  "<b>Deposit or withdrawal stuck?</b>\nTap the button below and send the email you signed up with — I'll check it live and fix it if I can.";
 
 async function getBotState(chatId: string): Promise<{ state: string; data: any }> {
   const [r] = await sql`SELECT state, data FROM bot_state WHERE chat_id = ${chatId}`;
@@ -1132,9 +1132,57 @@ async function escalateTicket(kind: "deposit" | "withdrawal", chatId: string, un
   return t.id as number;
 }
 
-// Try to auto-fix a deposit by reference; escalate if it can't be confirmed.
-async function botHandleDeposit(chatId: string, uname: string, ref: string): Promise<void> {
+// Deposit help: users normally don't have a TE… reference, so accept the email
+// they signed up with (or a reference if they happen to have one) and find the
+// stuck payment for them.
+async function botHandleDeposit(chatId: string, uname: string, input: string): Promise<void> {
   await setBotState(chatId, "idle");
+  const val = input.trim();
+  if (/^\S+@\S+\.\S+$/.test(val)) return botDepositByEmail(chatId, uname, val.toLowerCase());
+  if (/^TE[A-Z0-9]+$/i.test(val.replace(/\s+/g, ""))) return botDepositByRef(chatId, uname, val);
+  // Neither a valid email nor a TE… reference → ask again for the email.
+  await setBotState(chatId, "await_deposit_ref");
+  await tgSend(chatId, "Please send the <b>email you signed up with</b> (for example <code>name@example.com</code>) so I can find your deposit.", backToMenu());
+}
+
+// Look up a user by their registered email, reconcile their recent pending
+// deposits against the gateway, and credit any that actually paid.
+async function botDepositByEmail(chatId: string, uname: string, email: string): Promise<void> {
+  const [u] = await sql`SELECT id, name FROM users WHERE lower(email) = ${email}`;
+  if (!u) {
+    await tgSend(chatId, `I couldn't find an account with <b>${email}</b>. Please send the exact email you used to sign up on the app, or tap 🆘 to try again.`, backToMenu());
+    return;
+  }
+  const pend = await sql`
+    SELECT * FROM payments
+    WHERE user_id = ${u.id} AND purpose = 'fund' AND status = 'pending'
+      AND created_at > now() - interval '7 days'
+    ORDER BY created_at DESC`;
+  if (pend.length === 0) {
+    await tgSend(chatId, `You have <b>no pending deposits</b> on this account — any recent funding is already credited. Reopen the app and pull down to refresh. If you paid and it's still missing, reply here with the amount and the time you paid and I'll escalate it.`, backToMenu());
+    return;
+  }
+  let credited = 0;
+  const stillPending: any[] = [];
+  for (const p of pend) {
+    try {
+      const q = await getProvider().queryOrder(p.reference);
+      if (q.paid) { await creditDeposit(p.reference); credited += num(p.amount); }
+      else stillPending.push(p);
+    } catch { stillPending.push(p); }
+  }
+  if (credited > 0) {
+    await tgSend(chatId, `✅ Sorted! I confirmed your payment and credited <b>${formatNgn(credited)}</b> to your wallet. Reopen the app to see it. 🎉`, backToMenu());
+    return;
+  }
+  const total = stillPending.reduce((s, p) => s + num(p.amount), 0);
+  const id = await escalateTicket("deposit", chatId, uname, stillPending.map((p) => p.reference).join(", "),
+    `User <b>${email}</b> has ${stillPending.length} pending deposit(s) totalling ${formatNgn(total)} the gateway hasn't confirmed. Please verify and reply done.`);
+  await tgSend(chatId, `I found <b>${stillPending.length} pending deposit(s)</b> totalling ${formatNgn(total)}, but the gateway hasn't confirmed payment yet. I've opened <b>ticket #T${id}</b> — our team will verify and I'll message you here the moment it's credited.`, backToMenu());
+}
+
+// Fallback: auto-fix a deposit by its TE… reference.
+async function botDepositByRef(chatId: string, uname: string, ref: string): Promise<void> {
   const cleaned = ref.replace(/\s+/g, "").trim();
   const [p] = await sql`SELECT * FROM payments WHERE reference = ${cleaned} AND purpose = 'fund'`;
   if (!p) {
@@ -1161,9 +1209,49 @@ async function botHandleDeposit(chatId: string, uname: string, ref: string): Pro
   await tgSend(chatId, `I checked and the gateway hasn't confirmed this <b>${formatNgn(num(p.amount))}</b> deposit yet. I've opened <b>ticket #T${id}</b> — our team will verify and I'll message you here once it's credited.`, backToMenu());
 }
 
-// Try to auto-fix a withdrawal by reference; escalate if still processing.
-async function botHandleWithdrawal(chatId: string, uname: string, ref: string): Promise<void> {
+// Withdrawal help: accept the registered email (or a reference) and check the
+// user's latest payout for them.
+async function botHandleWithdrawal(chatId: string, uname: string, input: string): Promise<void> {
   await setBotState(chatId, "idle");
+  const val = input.trim();
+  if (/^\S+@\S+\.\S+$/.test(val)) return botWithdrawByEmail(chatId, uname, val.toLowerCase());
+  if (/^gp_/i.test(val.replace(/\s+/g, ""))) return botWithdrawByRef(chatId, uname, val);
+  // Neither a valid email nor a gp_… reference → ask again for the email.
+  await setBotState(chatId, "await_withdraw_ref");
+  await tgSend(chatId, "Please send the <b>email you signed up with</b> (for example <code>name@example.com</code>) so I can find your withdrawal.", backToMenu());
+}
+
+// Look up a user by email, settle any in-flight payouts, and report the latest.
+async function botWithdrawByEmail(chatId: string, uname: string, email: string): Promise<void> {
+  const [u] = await sql`SELECT id FROM users WHERE lower(email) = ${email}`;
+  if (!u) {
+    await tgSend(chatId, `I couldn't find an account with <b>${email}</b>. Please send the exact email you used to sign up on the app, or tap 💸 to try again.`, backToMenu());
+    return;
+  }
+  // Re-query anything still in flight (never re-sends money).
+  const inflight = await sql`SELECT reference FROM payouts WHERE user_id = ${u.id} AND status = 'SENT'`;
+  for (const row of inflight) { try { await settlePayout(row.reference); } catch { /* keep going */ } }
+
+  const [p] = await sql`SELECT * FROM payouts WHERE user_id = ${u.id} ORDER BY created_at DESC LIMIT 1`;
+  if (!p) {
+    await tgSend(chatId, `I don't see any withdrawal on this account yet. If you requested one from a different account, send that account's email.`, backToMenu());
+    return;
+  }
+  if (p.status === "PAID") {
+    await tgSend(chatId, `✅ Your latest withdrawal of <b>${formatNgn(num(p.amount))}</b> to ${p.bank_name} (${p.account_number}) is marked <b>PAID</b>. If your bank hasn't shown it, it usually lands within minutes.`, backToMenu());
+    return;
+  }
+  if (p.status === "REJECTED") {
+    await tgSend(chatId, `Your last withdrawal was declined and the <b>${formatNgn(num(p.amount))}</b> was refunded to your wallet. You can request it again from the app.`, backToMenu());
+    return;
+  }
+  const id = await escalateTicket("withdrawal", chatId, uname, p.reference,
+    `User <b>${email}</b> latest payout ${formatNgn(num(p.amount))} to ${p.bank_name} (${p.account_number}) is <b>${p.status}</b>. Please verify/pay and reply done.`);
+  await tgSend(chatId, `Your latest withdrawal of <b>${formatNgn(num(p.amount))}</b> to ${p.bank_name} is still <b>${String(p.status).toLowerCase()}</b>. I've opened <b>ticket #T${id}</b> and escalated it — I'll message you here the moment it's paid.`, backToMenu());
+}
+
+// Fallback: auto-fix a withdrawal by its gp_… reference.
+async function botWithdrawByRef(chatId: string, uname: string, ref: string): Promise<void> {
   const cleaned = ref.replace(/\s+/g, "").trim();
   const [p] = await sql`SELECT * FROM payouts WHERE reference = ${cleaned}`;
   if (!p) {
@@ -1253,10 +1341,10 @@ async function botHandleCallback(cq: any): Promise<void> {
   if (!chatId) return;
   if (data === "deposit_issue") {
     await setBotState(chatId, "await_deposit_ref");
-    await tgSend(chatId, "🆘 <b>Deposit not credited</b>\n\nSend me your <b>deposit reference</b> (it starts with <code>TE…</code> and is shown on the Fund Wallet / Transactions screen). I'll check it live and credit it if it's confirmed.", backToMenu());
+    await tgSend(chatId, "🆘 <b>Deposit not credited</b>\n\nSend me the <b>email you signed up with</b> on the app. I'll find your payment and credit it right away if it's confirmed. 💡", backToMenu());
   } else if (data === "withdrawal_issue") {
     await setBotState(chatId, "await_withdraw_ref");
-    await tgSend(chatId, "💸 <b>Withdrawal not received</b>\n\nSend me your <b>withdrawal reference</b> (it starts with <code>gp_…</code> and is on your Transactions screen). I'll re-check the transfer and confirm its status.", backToMenu());
+    await tgSend(chatId, "💸 <b>Withdrawal not received</b>\n\nSend me the <b>email you signed up with</b> on the app. I'll check your latest withdrawal and confirm its status.", backToMenu());
   } else if (data === "faq_menu") {
     await tgEdit(chatId, cq.message.message_id, FAQ_TEXT, [...backToMenu(), ...linkButtons()]);
   } else if (data === "main_menu") {
@@ -1291,12 +1379,12 @@ async function botHandleMessage(msg: any): Promise<void> {
   }
   if (cmd === "/deposit") {
     await setBotState(chatId, "await_deposit_ref");
-    await tgSend(chatId, "🆘 <b>Deposit not credited</b>\n\nSend me your <b>deposit reference</b> (starts with <code>TE…</code>, shown on Fund Wallet / Transactions). I'll check it live and credit it if confirmed.", backToMenu());
+    await tgSend(chatId, "🆘 <b>Deposit not credited</b>\n\nSend me the <b>email you signed up with</b> on the app. I'll find your payment and credit it if it's confirmed.", backToMenu());
     return;
   }
   if (cmd === "/withdraw" || cmd === "/withdrawal") {
     await setBotState(chatId, "await_withdraw_ref");
-    await tgSend(chatId, "💸 <b>Withdrawal not received</b>\n\nSend me your <b>withdrawal reference</b> (starts with <code>gp_…</code>, on your Transactions). I'll re-check the transfer and confirm its status.", backToMenu());
+    await tgSend(chatId, "💸 <b>Withdrawal not received</b>\n\nSend me the <b>email you signed up with</b> on the app. I'll check your latest withdrawal and confirm its status.", backToMenu());
     return;
   }
   if (cmd === "/faq") {
