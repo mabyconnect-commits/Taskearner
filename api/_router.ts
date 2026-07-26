@@ -1302,11 +1302,11 @@ async function telegramWebhook(req: ApiRequest): Promise<ApiResponse> {
 async function adminTelegramSetup(req: ApiRequest): Promise<ApiResponse> {
   await requireAdmin(req);
   if (!botEnabled()) return err("Set TELEGRAM_BOT_TOKEN first");
+  // Register on the canonical www host (APP_PUBLIC_URL) with no trailing slash —
+  // the apex domain 308-redirects to www, and www serves the slash-less path
+  // directly. Either redirect would make Telegram reject the response.
   const base = (String(req.body?.url || ENV.APP_PUBLIC_URL || ENV.APP_URL) || "").replace(/\/+$/, "");
-  // Trailing slash on purpose: the site enforces trailing slashes, so the
-  // slash-less form 308-redirects and Telegram (which won't follow redirects)
-  // treats it as a failure. Registering the canonical slashed URL avoids that.
-  const hookUrl = `${base}/api/telegram/webhook/`;
+  const hookUrl = `${base}/api/telegram/webhook`;
   const set = await setWebhook(hookUrl, ENV.TELEGRAM_WEBHOOK_SECRET);
   const info = await getWebhookInfo();
   return ok({

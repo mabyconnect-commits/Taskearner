@@ -44,7 +44,9 @@ export const ENV = {
   TELEGRAM_SUPPORT_GROUP_ID: process.env.TELEGRAM_SUPPORT_GROUP_ID || "",
   TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET || "",
   // Public-facing links surfaced in the bot menu.
-  APP_PUBLIC_URL: process.env.APP_PUBLIC_URL || "https://taskearner.site",
+  // Canonical domain: the bare apex (taskearner.site) 308-redirects to www, and
+  // Telegram / payment callbacks don't follow redirects — so default to www.
+  APP_PUBLIC_URL: process.env.APP_PUBLIC_URL || "https://www.taskearner.site",
   TELEGRAM_CHANNEL_URL: process.env.TELEGRAM_CHANNEL_URL || "https://t.me/taskearning101",
   TELEGRAM_GROUP_URL: process.env.TELEGRAM_GROUP_URL || "https://t.me/+ABIZY4MltSdmNzI5",
 };
