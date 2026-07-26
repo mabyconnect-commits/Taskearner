@@ -10,7 +10,7 @@ import { ENV } from "./_lib/env.js";
 import { listBanks, resolveAccount } from "./_lib/flutterwave.js";
 import {
   botEnabled, sendMessage as tgSend, editMessage as tgEdit, answerCallback as tgAnswer,
-  sendToSupport, mainMenu, linkButtons, setWebhook, getWebhookInfo,
+  sendToSupport, mainMenu, linkButtons, setWebhook, getWebhookInfo, setMyCommands, setMenuButton,
 } from "./_lib/telegram.js";
 
 function formatNgn(n: number): string {
@@ -1271,18 +1271,36 @@ async function botHandleMessage(msg: any): Promise<void> {
     await botHandleGroupMessage(msg);
     return;
   }
-  if (/^\/id\b/.test(text)) {
+  // Slash command (strip any @BotName suffix, lowercase) → quick actions.
+  const cmd = text.startsWith("/") ? text.split(/\s+/)[0].replace(/@.*$/, "").toLowerCase() : "";
+  const uname = msg.from?.username ? "@" + msg.from.username : (msg.from?.first_name || "user");
+
+  if (cmd === "/id") {
     await tgSend(chatId, `chat_id: <code>${chatId}</code>`);
     return;
   }
-  if (text === "/start" || text === "/menu" || text === "/help" || text === "/support") {
+  if (cmd === "/start" || cmd === "/menu" || cmd === "/help" || cmd === "/support") {
     await setBotState(chatId, "idle");
     const who = msg.from?.first_name ? ` ${msg.from.first_name}` : "";
     await tgSend(chatId, `👋 Hi${who}! I'm the <b>TaskEarner Support Bot</b>. I can check a stuck deposit or withdrawal and fix it on the spot. What do you need?`, mainMenu());
     return;
   }
+  if (cmd === "/deposit") {
+    await setBotState(chatId, "await_deposit_ref");
+    await tgSend(chatId, "🆘 <b>Deposit not credited</b>\n\nSend me your <b>deposit reference</b> (starts with <code>TE…</code>, shown on Fund Wallet / Transactions). I'll check it live and credit it if confirmed.", backToMenu());
+    return;
+  }
+  if (cmd === "/withdraw" || cmd === "/withdrawal") {
+    await setBotState(chatId, "await_withdraw_ref");
+    await tgSend(chatId, "💸 <b>Withdrawal not received</b>\n\nSend me your <b>withdrawal reference</b> (starts with <code>gp_…</code>, on your Transactions). I'll re-check the transfer and confirm its status.", backToMenu());
+    return;
+  }
+  if (cmd === "/faq") {
+    await setBotState(chatId, "idle");
+    await tgSend(chatId, FAQ_TEXT, [...backToMenu(), ...linkButtons()]);
+    return;
+  }
   const st = await getBotState(chatId);
-  const uname = msg.from?.username ? "@" + msg.from.username : (msg.from?.first_name || "user");
   if (st.state === "await_deposit_ref") {
     await botHandleDeposit(chatId, uname, text);
     return;
@@ -1322,6 +1340,9 @@ async function adminTelegramSetup(req: ApiRequest): Promise<ApiResponse> {
   const base = (String(req.body?.url || ENV.APP_PUBLIC_URL || ENV.APP_URL) || "").replace(/\/+$/, "");
   const hookUrl = `${base}/api/telegram/webhook`;
   const set = await setWebhook(hookUrl, ENV.TELEGRAM_WEBHOOK_SECRET);
+  // Also register the command list + Menu button (the in-chat quick actions).
+  await setMyCommands();
+  await setMenuButton();
   const info = await getWebhookInfo();
   return ok({
     ok: !!set?.ok,

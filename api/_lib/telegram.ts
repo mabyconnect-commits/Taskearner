@@ -111,3 +111,22 @@ export function setWebhook(url: string, secret: string): Promise<any> {
 export function getWebhookInfo(): Promise<any> {
   return call("getWebhookInfo", {});
 }
+
+// Register the bot's command list → Telegram shows a "Menu" quick-action button
+// beside the message box, and "/" lists these. Keeps users from retyping /start.
+export function setMyCommands(): Promise<any> {
+  return call("setMyCommands", {
+    commands: [
+      { command: "start", description: "🏠 Open the support menu" },
+      { command: "deposit", description: "🆘 Deposit not credited" },
+      { command: "withdraw", description: "💸 Withdrawal not received" },
+      { command: "faq", description: "❓ How to use the app" },
+      { command: "support", description: "👋 Talk to support" },
+    ],
+  });
+}
+
+// Show the "Menu" button (commands list) beside the input on every chat.
+export function setMenuButton(): Promise<any> {
+  return call("setChatMenuButton", { menu_button: { type: "commands" } });
+}
