@@ -177,6 +177,11 @@ export async function ensureSchema(): Promise<void> {
     `;
     // Shareable image (a compressed data: URL) earners can download for a post.
     await sql`ALTER TABLE sponsored ADD COLUMN IF NOT EXISTS image text NOT NULL DEFAULT ''`;
+    // Promotion marketplace: how many people the advertiser paid to reach, how
+    // many have been reached, and whether it's a normal post or a special task.
+    await sql`ALTER TABLE sponsored ADD COLUMN IF NOT EXISTS target int NOT NULL DEFAULT 0`;
+    await sql`ALTER TABLE sponsored ADD COLUMN IF NOT EXISTS reached int NOT NULL DEFAULT 0`;
+    await sql`ALTER TABLE sponsored ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'post'`;
 
     // Telegram support bot: per-chat conversation state (serverless is stateless,
     // so the "what is this chat waiting to send me" flag lives here).

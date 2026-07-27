@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { ensureSchema, sql, num } from "./_lib/db.js";
 import { ApiRequest, ApiResponse, HttpError, ok, err, textResp } from "./_lib/http.js";
 import { comparePassword, hashPassword, requireAuth, signToken } from "./_lib/auth.js";
-import { PLANS, planOf, SALES_WITHDRAW_MIN, COOLDOWN_MS, WORD_ROUNDS, dailyMax, utcDay, depositTax, depositTotal, withdrawFee, withdrawNet, REFERRAL_BONUS, REFERRAL_CONFIRM_TASKS, REFERRAL_WITHDRAW_MIN } from "./_lib/plans.js";
+import { PLANS, planOf, SALES_WITHDRAW_MIN, COOLDOWN_MS, WORD_ROUNDS, dailyMax, utcDay, depositTax, depositTotal, withdrawFee, withdrawNet, REFERRAL_BONUS, REFERRAL_CONFIRM_TASKS, REFERRAL_WITHDRAW_MIN, PROMO_PRICE_PER_PERSON, PROMO_MIN_PEOPLE } from "./_lib/plans.js";
 import { loadState, serializeUser, isAdminEmail } from "./_lib/state.js";
 import { getProvider } from "./_lib/payments/index.js";
 import { nekpayBankCode } from "./_lib/payments/banks.js";
@@ -234,7 +234,11 @@ async function earn(req: ApiRequest): Promise<ApiResponse> {
       if (usedFor("post") >= capFor("post")) throw new HttpError("You've reached today's sponsored-post limit for your plan.", 429);
       const [sp] = await tx`SELECT * FROM sponsored WHERE id = ${refId} AND status = 'active' FOR UPDATE`;
       if (!sp) throw new HttpError("This post is no longer available", 404);
-      if (num(sp.budget) > 0 && num(sp.spent) + plan.perPost > num(sp.budget)) throw new HttpError("This campaign has ended", 409);
+      // Newer campaigns end when the paid people-target is reached; legacy ones
+      // (target 0) end when the naira budget is spent.
+      const targetReached = num(sp.target) > 0 && num(sp.reached) >= num(sp.target);
+      const budgetExhausted = num(sp.target) === 0 && num(sp.budget) > 0 && num(sp.spent) + plan.perPost > num(sp.budget);
+      if (targetReached || budgetExhausted) throw new HttpError("This campaign has ended", 409);
       amt = plan.perPost; title = "Sponsored post shared";
       completed.posts = [...completed.posts, refId];
     } else {
@@ -260,8 +264,11 @@ async function earn(req: ApiRequest): Promise<ApiResponse> {
     if (kind === "post" && refId) {
       await tx`
         UPDATE sponsored
-        SET spent = spent + ${amt},
-            status = CASE WHEN budget > 0 AND spent + ${amt} >= budget THEN 'ended' ELSE status END
+        SET spent = spent + ${amt}, reached = reached + 1,
+            status = CASE
+              WHEN target > 0 AND reached + 1 >= target THEN 'ended'
+              WHEN target = 0 AND budget > 0 AND spent + ${amt} >= budget THEN 'ended'
+              ELSE status END
         WHERE id = ${refId}`;
     }
 
@@ -766,36 +773,41 @@ function sanitizeImage(raw: unknown): string {
 
 async function getSponsored(req: ApiRequest): Promise<ApiResponse> {
   requireAuth(req);
-  const rows = await sql`SELECT id, headline, copy, platform, image FROM sponsored WHERE status = 'active' ORDER BY created_at DESC`;
+  // Only normal posts are shareable by earners; special tasks are run by admin.
+  const rows = await sql`SELECT id, headline, copy, platform, image FROM sponsored WHERE status = 'active' AND kind = 'post' ORDER BY created_at DESC`;
   return ok({ sponsored: rows.map((s: any) => ({ id: s.id, headline: s.headline, copy: s.copy, platform: s.platform, image: s.image || "" })) });
 }
 
-// A user pays (from their deposit) to run their own sponsored post. It goes to
-// the admin queue as 'pending' and only appears in the feed once approved.
-const SPONSORED_MIN_BUDGET = 1000;
+// A user pays (from their deposit) to promote — either a normal post earners
+// share, or a "special task" they describe for us to execute. Priced per person
+// at ₦PROMO_PRICE_PER_PERSON. Goes to the admin queue as 'pending'.
 async function applySponsored(req: ApiRequest): Promise<ApiResponse> {
   const uid = requireAuth(req);
+  const kind = req.body?.kind === "special" ? "special" : "post";
   const headline = String(req.body?.headline || "").trim();
   const copy = String(req.body?.copy || "").trim();
-  const platform = String(req.body?.platform || "Facebook").trim() || "Facebook";
-  const budget = Math.floor(Number(req.body?.budget) || 0);
+  const platform = String(req.body?.platform || "WhatsApp").trim() || "WhatsApp";
+  const target = Math.max(0, Math.floor(Number(req.body?.target) || 0));
   const image = sanitizeImage(req.body?.image);
-  if (headline.length < 3) return err("Give your campaign a headline");
-  if (copy.length < 10) return err("Write the post content advertisers will share");
-  if (budget < SPONSORED_MIN_BUDGET) return err(`Minimum campaign budget is ₦${SPONSORED_MIN_BUDGET.toLocaleString()}`);
 
+  if (headline.length < 3) return err(kind === "special" ? "Give your task a title" : "Give your campaign a headline");
+  if (copy.length < 10) return err(kind === "special" ? "Describe exactly what you want us to do" : "Write the post content earners will share");
+  if (target < PROMO_MIN_PEOPLE) return err(`Minimum is ${PROMO_MIN_PEOPLE} people (${formatNgn(PROMO_MIN_PEOPLE * PROMO_PRICE_PER_PERSON)})`);
+
+  const budget = target * PROMO_PRICE_PER_PERSON;
   const [u] = await sql`SELECT deposit FROM users WHERE id = ${uid}`;
   if (!u) return err("User not found", 404);
   if (num(u.deposit) < budget) return err("Insufficient deposit balance. Fund your wallet first.");
 
+  const label = kind === "special" ? "Special task: " : "Promotion: ";
   await sql.begin(async (tx) => {
     await tx`UPDATE users SET deposit = deposit - ${budget} WHERE id = ${uid}`;
     await tx`
       INSERT INTO transactions (user_id, type, title, amount, wallet)
-      VALUES (${uid}, 'sponsored', ${"Sponsored post: " + headline}, ${-budget}, 'deposit')`;
+      VALUES (${uid}, 'sponsored', ${label + headline}, ${-budget}, 'deposit')`;
     await tx`
-      INSERT INTO sponsored (headline, copy, platform, budget, spent, status, image, created_by)
-      VALUES (${headline}, ${copy}, ${platform}, ${budget}, 0, 'pending', ${image}, ${uid})`;
+      INSERT INTO sponsored (headline, copy, platform, budget, spent, target, reached, kind, status, image, created_by)
+      VALUES (${headline}, ${copy}, ${platform}, ${budget}, 0, ${target}, 0, ${kind}, 'pending', ${image}, ${uid})`;
   });
   return ok({ user: await loadState(uid), transactions: await txList(uid) });
 }
@@ -1064,13 +1076,14 @@ async function adminTaskAction(req: ApiRequest): Promise<ApiResponse> {
 async function adminSponsored(req: ApiRequest): Promise<ApiResponse> {
   await requireAdmin(req);
   const rows = await sql`
-    SELECT s.id, s.headline, s.copy, s.platform, s.budget, s.spent, s.status, s.image, s.created_at, u.name AS advertiser, u.email
+    SELECT s.id, s.headline, s.copy, s.platform, s.budget, s.spent, s.target, s.reached, s.kind, s.status, s.image, s.created_at, u.name AS advertiser, u.email
     FROM sponsored s LEFT JOIN users u ON u.id = s.created_by
     ORDER BY s.created_at DESC`;
   return ok({
     sponsored: rows.map((s: any) => ({
       id: s.id, headline: s.headline, copy: s.copy, platform: s.platform,
-      budget: num(s.budget), spent: num(s.spent), status: s.status, image: s.image || "",
+      budget: num(s.budget), spent: num(s.spent), target: s.target, reached: s.reached, kind: s.kind || "post",
+      status: s.status, image: s.image || "",
       advertiser: s.advertiser || "Official", email: s.email || "",
       ts: new Date(s.created_at).getTime(),
     })),

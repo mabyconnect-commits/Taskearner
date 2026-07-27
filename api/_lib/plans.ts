@@ -62,6 +62,10 @@ export const REFERRAL_BONUS = 250;
 export const REFERRAL_CONFIRM_TASKS = 25;
 export const REFERRAL_WITHDRAW_MIN = 5000;
 
+// Promotion marketplace: advertisers pay per person they want to reach.
+export const PROMO_PRICE_PER_PERSON = 150;
+export const PROMO_MIN_PEOPLE = 5;
+
 // Taxes & fees
 export const DEPOSIT_TAX_RATE = 0.08; // 8% added on top of the funded amount
 export const WITHDRAW_TAX_RATE = 0.035; // 3.5% deducted from every withdrawal

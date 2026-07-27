@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { Copy, Check, Share2, Loader2, Megaphone, X, Download, ImagePlus } from "lucide-react";
+import { Copy, Check, Share2, Loader2, Megaphone, X, Download, ImagePlus, Sparkles, Users, Minus, Plus } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useStore } from "@/store/useStore";
 import { ActivateGate } from "@/components/ActivateGate";
-import { planById, SPONSORED_POSTS, SponsoredPost, SALES_WITHDRAW_MIN } from "@/lib/data";
+import { planById, SPONSORED_POSTS, SponsoredPost, PROMO_PRICE_PER_PERSON, PROMO_MIN_PEOPLE } from "@/lib/data";
 import { api } from "@/lib/api";
 import { formatNaira } from "@/lib/format";
 import { compressImage, downloadDataUrl } from "@/lib/image";
@@ -159,17 +159,19 @@ function AdvertiseSheet({
 }: {
   deposit: number;
   onClose: () => void;
-  onSubmit: (p: { headline: string; copy: string; platform: string; budget: number; image?: string }) => Promise<{ ok: boolean; msg: string }>;
+  onSubmit: (p: { headline: string; copy: string; platform: string; target: number; kind: "post" | "special"; image?: string }) => Promise<{ ok: boolean; msg: string }>;
 }) {
   const toast = useToast();
+  const [mode, setMode] = useState<"post" | "special">("post");
   const [headline, setHeadline] = useState("");
   const [copy, setCopy] = useState("");
   const [platform, setPlatform] = useState<string>("WhatsApp");
-  const [budget, setBudget] = useState("");
+  const [people, setPeople] = useState(10);
   const [image, setImage] = useState<string>("");
   const [imgBusy, setImgBusy] = useState(false);
   const [busy, setBusy] = useState(false);
-  const n = Number(budget) || 0;
+  const price = people * PROMO_PRICE_PER_PERSON;
+  const special = mode === "special";
 
   const pickImage = async (file?: File) => {
     if (!file) return;
@@ -184,78 +186,125 @@ function AdvertiseSheet({
   };
 
   const submit = async () => {
-    if (headline.trim().length < 3) return toast("Give your campaign a headline", "error");
-    if (copy.trim().length < 10) return toast("Write the post content earners will share", "error");
-    if (n < SALES_WITHDRAW_MIN) return toast(`Minimum budget is ${formatNaira(SALES_WITHDRAW_MIN)}`, "error");
-    if (n > deposit) return toast("Insufficient deposit. Fund your wallet first.", "error");
+    if (headline.trim().length < 3) return toast(special ? "Give your task a title" : "Give your campaign a headline", "error");
+    if (copy.trim().length < 10) return toast(special ? "Describe what you want us to do" : "Write the post content earners will share", "error");
+    if (people < PROMO_MIN_PEOPLE) return toast(`Minimum ${PROMO_MIN_PEOPLE} people`, "error");
+    if (price > deposit) return toast("Insufficient deposit. Fund your wallet first.", "error");
     setBusy(true);
-    const res = await onSubmit({ headline: headline.trim(), copy: copy.trim(), platform, budget: n, image: image || undefined });
+    const res = await onSubmit({ headline: headline.trim(), copy: copy.trim(), platform, target: people, kind: mode, image: image || undefined });
     setBusy(false);
     toast(res.msg, res.ok ? "success" : "error");
     if (res.ok) onClose();
   };
 
+  const setP = (v: number) => setPeople(Math.max(PROMO_MIN_PEOPLE, Math.min(5000, v)));
+
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 sm:items-center" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-t-4xl bg-white p-6 dark:bg-ink-900 sm:rounded-4xl"
+        className="flex max-h-[92vh] w-full max-w-md flex-col rounded-t-4xl bg-white dark:bg-ink-900 sm:max-h-[88vh] sm:rounded-4xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-xl font-extrabold">Advertise with us</h2>
+        {/* header */}
+        <div className="flex items-center justify-between px-5 pt-5">
+          <h2 className="font-display text-xl font-extrabold">Promote with us 🚀</h2>
           <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 dark:bg-white/5"><X className="h-5 w-5" /></button>
         </div>
-        <p className="mb-4 text-sm text-slate-400">
-          Your post is shared by real earners across Nigeria. Set a budget — earners are paid from it per share, and your campaign ends when it's used up. Goes live after a quick review.
-        </p>
 
-        <div className="space-y-4">
+        {/* mode switch */}
+        <div className="px-5 pt-3">
+          <div className="flex gap-2 rounded-2xl bg-slate-100 p-1.5 dark:bg-white/5">
+            <button onClick={() => setMode("post")} className={cn("flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-bold transition", !special ? "bg-brand-500 text-slate-900 shadow" : "text-slate-500")}>
+              <Megaphone className="h-4 w-4" /> Boost a Post
+            </button>
+            <button onClick={() => setMode("special")} className={cn("flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-bold transition", special ? "bg-brand-500 text-slate-900 shadow" : "text-slate-500")}>
+              <Sparkles className="h-4 w-4" /> Special Task
+            </button>
+          </div>
+        </div>
+
+        {/* scrollable body */}
+        <div className="no-scrollbar flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <p className="rounded-2xl bg-brand-50 p-3 text-xs font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-200">
+            {special
+              ? "Tell us exactly what you want done — grow a page, run a poll, mass-share, gather sign-ups — and our team executes it for you."
+              : "Real earners across Nigeria share your post. You only pay per person reached."}
+          </p>
+
           <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-500">Headline</span>
-            <input value={headline} onChange={(e) => setHeadline(e.target.value)} className="input" placeholder="e.g. Grand opening this weekend" maxLength={60} />
+            <span className="mb-1.5 block text-sm font-semibold text-slate-500">{special ? "Task title" : "Headline"}</span>
+            <input value={headline} onChange={(e) => setHeadline(e.target.value)} className="input" placeholder={special ? "e.g. Grow my Instagram followers" : "e.g. Grand opening this weekend"} maxLength={70} />
           </label>
+
           <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-500">Post content</span>
-            <textarea value={copy} onChange={(e) => setCopy(e.target.value)} className="input min-h-[90px] resize-none" placeholder="The exact caption earners will post…" maxLength={280} />
+            <span className="mb-1.5 block text-sm font-semibold text-slate-500">{special ? "What do you want us to do?" : "Post content"}</span>
+            <textarea value={copy} onChange={(e) => setCopy(e.target.value)} className="input min-h-[90px] resize-none" placeholder={special ? "Describe the task, links, handles, and exactly what success looks like…" : "The exact caption earners will post…"} maxLength={400} />
           </label>
+
           <div>
-            <span className="mb-1.5 block text-sm font-semibold text-slate-500">Flyer image (optional)</span>
+            <span className="mb-1.5 block text-sm font-semibold text-slate-500">{special ? "Reference image (optional)" : "Flyer image (optional)"}</span>
             {image ? (
               <div className="relative overflow-hidden rounded-2xl">
-                <img src={image} alt="Flyer preview" className="max-h-52 w-full object-contain bg-slate-100 dark:bg-black/30" />
+                <img src={image} alt="preview" className="max-h-52 w-full bg-slate-100 object-contain dark:bg-black/30" />
                 <button onClick={() => setImage("")} className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-black/60 text-white"><X className="h-4 w-4" /></button>
               </div>
             ) : (
-              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 py-6 text-sm font-semibold text-slate-500 dark:border-white/10">
+              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 py-5 text-sm font-semibold text-slate-500 dark:border-white/10">
                 {imgBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
-                {imgBusy ? "Processing…" : "Upload an image earners can download"}
+                {imgBusy ? "Processing…" : special ? "Add a reference image" : "Add a flyer earners can download"}
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => pickImage(e.target.files?.[0])} />
               </label>
             )}
           </div>
+
+          {!special && (
+            <div>
+              <span className="mb-2 block text-sm font-semibold text-slate-500">Platform</span>
+              <div className="flex flex-wrap gap-2">
+                {PLATFORMS.map((pv) => (
+                  <button key={pv} onClick={() => setPlatform(pv)} className={cn("rounded-xl px-4 py-2.5 text-sm font-bold transition", platform === pv ? "bg-brand-500 text-slate-900" : "bg-slate-100 text-slate-500 dark:bg-white/5")}>
+                    {pv}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* people target */}
           <div>
-            <span className="mb-2 block text-sm font-semibold text-slate-500">Platform</span>
-            <div className="flex flex-wrap gap-2">
-              {PLATFORMS.map((pv) => (
-                <button key={pv} onClick={() => setPlatform(pv)} className={cn("rounded-xl px-4 py-2.5 text-sm font-bold transition", platform === pv ? "bg-brand-500 text-slate-900" : "bg-slate-100 text-slate-500 dark:bg-white/5")}>
-                  {pv}
+            <span className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-500"><Users className="h-4 w-4" /> How many people?</span>
+            <div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3 dark:bg-white/5">
+              <button onClick={() => setP(people - 5)} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-slate-700 shadow-soft dark:bg-white/10 dark:text-white"><Minus className="h-5 w-5" /></button>
+              <div className="flex-1 text-center">
+                <p className="font-display text-3xl font-extrabold leading-none">{people}</p>
+                <p className="mt-0.5 text-[11px] font-semibold text-slate-400">people × {formatNaira(PROMO_PRICE_PER_PERSON, false)}</p>
+              </div>
+              <button onClick={() => setP(people + 5)} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-slate-700 shadow-soft dark:bg-white/10 dark:text-white"><Plus className="h-5 w-5" /></button>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[10, 25, 50, 100, 250].map((v) => (
+                <button key={v} onClick={() => setPeople(v)} className={cn("rounded-xl px-3 py-2 text-sm font-bold transition", people === v ? "bg-brand-500 text-slate-900" : "bg-slate-100 text-brand-600 dark:bg-white/5 dark:text-brand-300")}>
+                  {v}
                 </button>
               ))}
             </div>
           </div>
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-500">Budget (from your deposit · {formatNaira(deposit)} available)</span>
-            <input value={budget} onChange={(e) => setBudget(e.target.value.replace(/\D/g, ""))} className="input text-xl font-bold" placeholder="0" inputMode="numeric" />
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {[1000, 5000, 10000, 25000].map((v) => (
-              <button key={v} onClick={() => setBudget(String(v))} className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-brand-600 dark:bg-white/5 dark:text-brand-300">
-                {formatNaira(v, false)}
-              </button>
-            ))}
+        </div>
+
+        {/* sticky pay footer */}
+        <div className="border-t border-slate-100 p-4 dark:border-white/10">
+          <div className="mb-3 flex items-end justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400">Total to pay</p>
+              <p className="font-display text-2xl font-extrabold">{formatNaira(price)}</p>
+            </div>
+            <p className="text-right text-[11px] font-semibold text-slate-400">
+              {people} × {formatNaira(PROMO_PRICE_PER_PERSON, false)}<br />
+              Deposit: {formatNaira(deposit)}
+            </p>
           </div>
-          <button onClick={submit} disabled={busy} className="btn-primary w-full py-4 text-lg">
-            {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : `Pay ${n ? formatNaira(n) : ""} & submit`}
+          <button onClick={submit} disabled={busy || price > deposit} className="btn-primary w-full py-4 text-lg disabled:opacity-60">
+            {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : price > deposit ? "Fund wallet to continue" : `Pay ${formatNaira(price)} · Reach ${people}`}
           </button>
         </div>
       </div>

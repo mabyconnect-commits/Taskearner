@@ -569,15 +569,19 @@ function SponsoredTab() {
         <div className="space-y-2">
           {(data?.sponsored ?? []).map((s: any) => (
             <div key={s.id} className="card p-4">
-              <div className="flex items-center justify-between">
-                <p className="font-bold">{s.headline}</p>
-                <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold", statusTone(s.status))}>{s.status}</span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  {s.kind === "special" && <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-extrabold uppercase text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">Special</span>}
+                  <p className="truncate font-bold">{s.headline}</p>
+                </div>
+                <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold", statusTone(s.status))}>{s.status}</span>
               </div>
               {s.image && <img src={s.image} alt={s.headline} className="mt-2 max-h-40 w-full rounded-xl bg-slate-100 object-contain dark:bg-black/30" />}
               <p className="mt-2 text-sm text-slate-400">"{s.copy}"</p>
               <p className="mt-1 text-xs text-slate-500">
-                {s.platform} · by {s.advertiser}
-                {s.budget > 0 && <> · budget {formatNaira(s.budget)} (spent {formatNaira(s.spent)})</>}
+                {s.kind === "special" ? "Custom task" : s.platform} · by {s.advertiser}
+                {s.target > 0 && <> · reach {s.reached}/{s.target} people</>}
+                {s.budget > 0 && <> · paid {formatNaira(s.budget)}</>}
               </p>
               <div className="mt-3 flex gap-2">
                 {s.status === "pending" && (

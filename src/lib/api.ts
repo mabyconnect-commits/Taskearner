@@ -127,7 +127,7 @@ export const api = {
   // Marketplace (live tasks + sponsored feeds, and user-paid campaign apply)
   tasks: () => req<{ tasks: ServerTask[] }>("/tasks"),
   sponsored: () => req<{ sponsored: ServerSponsored[] }>("/sponsored"),
-  applySponsored: (b: { headline: string; copy: string; platform: string; budget: number; image?: string }) =>
+  applySponsored: (b: { headline: string; copy: string; platform: string; target: number; kind?: "post" | "special"; image?: string }) =>
     req("/sponsored/apply", "POST", b),
 
   // Admin
