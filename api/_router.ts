@@ -1159,18 +1159,23 @@ async function escalateTicket(
   uname: string,
   reference: string,
   details: string,
-  opts: { email?: string; photoFileId?: string } = {},
+  opts: { email?: string; photoFileId?: string; platformNo?: string } = {},
 ): Promise<number> {
   const email = opts.email || "";
   const [t] = await sql`
     INSERT INTO support_tickets (kind, chat_id, tg_username, email, reference, details)
     VALUES (${kind}, ${chatId}, ${uname}, ${email}, ${reference}, ${details}) RETURNING id`;
   const label = kind === "deposit" ? "Deposit not credited" : "Withdrawal not received";
+  // The NEKpay Platform Order No is what ops staff look up on the gateway; show
+  // it (tap-to-copy via <code>) when we have it, else fall back to our ref.
+  const idLine = opts.platformNo
+    ? `Platform Order No: <code>${opts.platformNo}</code>\n`
+    : `Ref: <code>${reference || "—"}</code>\n`;
   const body =
     `🎫 <b>Ticket #T${t.id}</b> — ${label}\n` +
     `From: ${uname} (chat <code>${chatId}</code>)\n` +
     (email ? `Email: <code>${maskEmail(email)}</code>\n` : "") +
-    `Ref: <code>${reference || "—"}</code>\n\n${details}\n\n` +
+    `${idLine}\n${details}\n\n` +
     `↩️ <i>Reply to this message with</i> <b>done</b> / <b>success</b> / <b>paid</b> <i>to resolve and auto-notify the user.</i>`;
   const gid = opts.photoFileId
     ? await sendPhotoToSupport(opts.photoFileId, body)
@@ -1317,7 +1322,8 @@ async function depAmount(chatId: string, uname: string, amountText: string, data
     await tgSend(chatId, `I couldn't find a <b>${formatNgn(amount)}</b> order on your account. Open the app → <b>Fund Wallet</b> → enter exactly <b>${formatNgn(amount)}</b> to create the order, then come back and try again.`, backToMenu());
     return; // stay in dep_amount so they can retry
   }
-  await setBotState(chatId, "dep_receipt", { userId, matchedRef: pendMatch.reference, matchedAmount: amount });
+  const platformNo = pendMatch.meta && pendMatch.meta.orderNo ? String(pendMatch.meta.orderNo) : "";
+  await setBotState(chatId, "dep_receipt", { userId, matchedRef: pendMatch.reference, matchedAmount: amount, platformNo });
   await tgSend(chatId, `Great — I found your <b>${formatNgn(amount)}</b> order. 📸 Now send your <b>receipt as a PHOTO</b> — not a file.`, backToMenu());
 }
 
@@ -1336,6 +1342,7 @@ async function depReceipt(chatId: string, uname: string, msg: any, data: any): P
   const matchedRef = data?.matchedRef;
   const amount = num(data?.matchedAmount);
   const userId = data?.userId;
+  let platformNo = data?.platformNo || "";
   if (!matchedRef || !userId) {
     await setBotState(chatId, "dep_contact");
     await tgSend(chatId, "Let's start again — send the <b>email or phone</b> on your account.", backToMenu());
@@ -1365,9 +1372,14 @@ async function depReceipt(chatId: string, uname: string, msg: any, data: any): P
   }
   const [u] = await sql`SELECT email FROM users WHERE id = ${userId}`;
   const email = u?.email || "";
+  // Make sure we have the NEKpay Platform Order No for the ticket.
+  if (!platformNo) {
+    const [pay] = await sql`SELECT meta FROM payments WHERE reference = ${matchedRef}`;
+    if (pay?.meta?.orderNo) platformNo = String(pay.meta.orderNo);
+  }
   const resend = (oc?.n ?? 0) === 1;
   const details = `Amount: <b>${formatNgn(amount)}</b> — user says paid, gateway hasn't confirmed.${resend ? "\n🔁 Re-sent with a new receipt." : ""}\nPlease verify the receipt and reply <b>done</b>.`;
-  const id = await escalateTicket("deposit", chatId, uname, matchedRef, details, { email, photoFileId: fileId });
+  const id = await escalateTicket("deposit", chatId, uname, matchedRef, details, { email, photoFileId: fileId, platformNo });
   await tgSend(chatId, `✅ Sent your receipt to support — <b>ticket #T${id}</b>. You'll be messaged the moment it's credited.`, backToMenu());
 }
 
