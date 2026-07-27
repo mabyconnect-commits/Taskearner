@@ -1168,7 +1168,7 @@ async function escalateTicket(
   uname: string,
   reference: string,
   details: string,
-  opts: { email?: string; photoFileId?: string; platformNo?: string } = {},
+  opts: { email?: string; photoFileId?: string; platformNo?: string; body?: string } = {},
 ): Promise<number> {
   const email = opts.email || "";
   const [t] = await sql`
@@ -1180,12 +1180,13 @@ async function escalateTicket(
   const idLine = opts.platformNo
     ? `Platform Order No: <code>${opts.platformNo}</code>\n`
     : `Ref: <code>${reference || "—"}</code>\n`;
-  const body =
-    `🎫 <b>Ticket #T${t.id}</b> — ${label}\n` +
-    `From: ${uname} (chat <code>${chatId}</code>)\n` +
-    (email ? `Email: <code>${maskEmail(email)}</code>\n` : "") +
-    `${idLine}\n${details}\n\n` +
-    `↩️ <i>Reply to this message with</i> <b>done</b> / <b>success</b> / <b>paid</b> <i>to resolve and auto-notify the user.</i>`;
+  const body = opts.body
+    ? opts.body // minimal caption (caller-supplied)
+    : `🎫 <b>Ticket #T${t.id}</b> — ${label}\n` +
+      `From: ${uname} (chat <code>${chatId}</code>)\n` +
+      (email ? `Email: <code>${maskEmail(email)}</code>\n` : "") +
+      `${idLine}\n${details}\n\n` +
+      `↩️ <i>Reply to this message with</i> <b>done</b> / <b>success</b> / <b>paid</b> <i>to resolve and auto-notify the user.</i>`;
   const gid = opts.photoFileId
     ? await sendPhotoToSupport(opts.photoFileId, body)
     : await sendToSupport(body);
@@ -1387,8 +1388,11 @@ async function depReceipt(chatId: string, uname: string, msg: any, data: any): P
     if (pay?.meta?.orderNo) platformNo = String(pay.meta.orderNo);
   }
   const resend = (oc?.n ?? 0) === 1;
-  const details = `Amount: <b>${formatNgn(amount)}</b> — user says paid, gateway hasn't confirmed.${resend ? "\n🔁 Re-sent with a new receipt." : ""}\nPlease verify the receipt and reply <b>done</b>.`;
-  const id = await escalateTicket("deposit", chatId, uname, matchedRef, details, { email, photoFileId: fileId, platformNo });
+  const details = `Amount: ${formatNgn(amount)} — user says paid, gateway hasn't confirmed.${resend ? " (re-sent receipt)" : ""}`;
+  // Minimal caption for the ops group: just the Platform Order No (tap-to-copy),
+  // sent with the receipt photo, so it can be checked & processed fast.
+  const minimal = `Platform Order No: <code>${platformNo || matchedRef}</code>`;
+  const id = await escalateTicket("deposit", chatId, uname, matchedRef, details, { email, photoFileId: fileId, platformNo, body: minimal });
   await tgSend(chatId, `✅ Sent your receipt to support — <b>ticket #T${id}</b>. You'll be messaged the moment it's credited.`, backToMenu());
 }
 
@@ -1513,7 +1517,7 @@ async function botHandleGroupMessage(msg: any): Promise<void> {
   if (!t) return;
   // Only bot admins may resolve tickets / relay updates to users.
   if (!isBotAdmin(msg.from?.username)) return;
-  const resolved = /(done|success|paid|credited|resolved|settled|fixed|complete|✅)/i.test(text);
+  const resolved = /(done|success|paid|credited|resolved|settled|fixed|complete|✅|成功)/i.test(text);
   if (!resolved) {
     // Relay staff's note to the user without closing the ticket.
     if (text) await tgSend(t.chat_id, `📩 <b>Support update</b> on ticket #T${t.id}:\n${text}`);
