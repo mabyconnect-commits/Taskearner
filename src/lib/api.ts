@@ -144,10 +144,10 @@ export const api = {
   adminCreateTask: (b: { title: string; detail: string; category: string; link?: string }) =>
     req("/admin/tasks", "POST", b),
   adminTaskAction: (b: { id: string; action: "enable" | "disable" | "delete" }) => req("/admin/tasks/action", "POST", b),
-  adminSponsored: () => req<{ sponsored: any[] }>("/admin/sponsored"),
+  adminSponsored: () => req<{ stats: { campaigns: number; advertisers: number; revenue: number; liveValue: number; pending: number; active: number; special: number; reached: number; target: number }; sponsored: any[] }>("/admin/sponsored"),
   adminCreateSponsored: (b: { headline: string; copy: string; platform: string; budget?: number; image?: string }) =>
     req("/admin/sponsored", "POST", b),
-  adminSponsoredAction: (b: { id: string; action: "approve" | "reject" | "end" }) =>
+  adminSponsoredAction: (b: { id: string; action: "approve" | "reject" | "end" | "complete" }) =>
     req("/admin/sponsored/action", "POST", b),
   adminTelegramSetup: () => req<{ ok: boolean; webhookUrl: string; supportGroup: string; info?: any; setResult?: any }>("/admin/telegram/setup", "POST"),
 };

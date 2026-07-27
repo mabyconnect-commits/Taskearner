@@ -518,11 +518,11 @@ function SponsoredTab() {
     }
   };
 
-  const act = async (id: string, action: "approve" | "reject" | "end") => {
+  const act = async (id: string, action: "approve" | "reject" | "end" | "complete") => {
     setBusy(id);
     try {
       await api.adminSponsoredAction({ id, action });
-      toast(action === "approve" ? "Approved & live" : action === "reject" ? "Rejected & refunded" : "Ended", "success");
+      toast(action === "approve" ? "Approved & live" : action === "reject" ? "Rejected & refunded" : action === "complete" ? "Verified & completed" : "Ended", "success");
       reload();
     } catch (e: any) {
       toast(e?.message || "Failed", "error");
@@ -533,11 +533,36 @@ function SponsoredTab() {
 
   const statusTone = (s: string) =>
     s === "active" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
+    : s === "completed" ? "bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300"
     : s === "pending" ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
     : "bg-slate-200 text-slate-600 dark:bg-white/10 dark:text-slate-300";
 
+  const stats = data?.stats;
+
   return (
     <div>
+      {/* advert tracking */}
+      {stats && (
+        <div className="mb-4 grid grid-cols-2 gap-3">
+          <div className="card p-4">
+            <p className="text-xs font-semibold text-slate-400">Advertisers</p>
+            <p className="mt-1 font-display text-2xl font-extrabold">{stats.advertisers.toLocaleString()}</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs font-semibold text-slate-400">Advert revenue</p>
+            <p className="mt-1 font-display text-2xl font-extrabold text-emerald-600">{formatNaira(stats.revenue)}</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs font-semibold text-slate-400">Awaiting review</p>
+            <p className="mt-1 font-display text-2xl font-extrabold text-amber-500">{stats.pending}</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs font-semibold text-slate-400">People reached</p>
+            <p className="mt-1 font-display text-2xl font-extrabold">{stats.reached.toLocaleString()}<span className="text-sm text-slate-400">/{stats.target.toLocaleString()}</span></p>
+          </div>
+        </div>
+      )}
+
       <div className="card mb-4 space-y-3 p-4">
         <p className="font-display font-bold">Publish an official post</p>
         <input value={form.headline} onChange={(e) => setForm({ ...form, headline: e.target.value })} className="input" placeholder="Headline" />
@@ -595,9 +620,14 @@ function SponsoredTab() {
                   </>
                 )}
                 {s.status === "active" && (
-                  <button onClick={() => act(s.id, "end")} disabled={busy === s.id} className="btn-ghost flex-1 py-2 text-sm">
-                    <RefreshCw className="h-4 w-4" /> End campaign
-                  </button>
+                  <>
+                    <button onClick={() => act(s.id, "complete")} disabled={busy === s.id} className="btn-primary flex-1 py-2 text-sm">
+                      {busy === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Verify done
+                    </button>
+                    <button onClick={() => act(s.id, "end")} disabled={busy === s.id} className="btn-ghost flex-1 py-2 text-sm">
+                      <RefreshCw className="h-4 w-4" /> End &amp; refund
+                    </button>
+                  </>
                 )}
               </div>
             </div>

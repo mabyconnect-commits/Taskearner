@@ -1079,7 +1079,31 @@ async function adminSponsored(req: ApiRequest): Promise<ApiResponse> {
     SELECT s.id, s.headline, s.copy, s.platform, s.budget, s.spent, s.target, s.reached, s.kind, s.status, s.image, s.created_at, u.name AS advertiser, u.email
     FROM sponsored s LEFT JOIN users u ON u.id = s.created_by
     ORDER BY s.created_at DESC`;
+  // Advert tracking stats — only real (paid) advertiser campaigns count.
+  const [stats] = await sql`
+    SELECT
+      count(*)::int AS campaigns,
+      count(DISTINCT created_by)::int AS advertisers,
+      COALESCE(sum(budget), 0) AS revenue,
+      COALESCE(sum(budget) FILTER (WHERE status IN ('pending','active')), 0) AS live_value,
+      count(*) FILTER (WHERE status = 'pending')::int AS pending,
+      count(*) FILTER (WHERE status = 'active')::int AS active,
+      count(*) FILTER (WHERE kind = 'special')::int AS special,
+      COALESCE(sum(reached), 0)::int AS reached,
+      COALESCE(sum(target), 0)::int AS target
+    FROM sponsored WHERE created_by IS NOT NULL`;
   return ok({
+    stats: {
+      campaigns: stats?.campaigns ?? 0,
+      advertisers: stats?.advertisers ?? 0,
+      revenue: num(stats?.revenue),
+      liveValue: num(stats?.live_value),
+      pending: stats?.pending ?? 0,
+      active: stats?.active ?? 0,
+      special: stats?.special ?? 0,
+      reached: stats?.reached ?? 0,
+      target: stats?.target ?? 0,
+    },
     sponsored: rows.map((s: any) => ({
       id: s.id, headline: s.headline, copy: s.copy, platform: s.platform,
       budget: num(s.budget), spent: num(s.spent), target: s.target, reached: s.reached, kind: s.kind || "post",
@@ -1139,6 +1163,10 @@ async function adminSponsoredAction(req: ApiRequest): Promise<ApiResponse> {
           VALUES (${s.created_by}, 'refund', ${"Refund (unspent): " + s.headline}, ${refund}, 'deposit')`;
       }
     });
+  } else if (action === "complete") {
+    // Verify & mark done (delivered). No refund — the campaign was fulfilled.
+    if (s.status === "rejected" || s.status === "completed") return err("This campaign is already closed");
+    await sql`UPDATE sponsored SET status = 'completed' WHERE id = ${id}`;
   } else {
     return err("Unknown action");
   }
