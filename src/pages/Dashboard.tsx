@@ -34,7 +34,7 @@ const earnWays = [
 export default function Dashboard() {
   const nav = useNavigate();
   const toast = useToast();
-  const { name, username, plan, bank, socialLinked, transactions, referrals } = useStore();
+  const { name, username, plan, planActivated, bank, socialLinked, transactions, referrals } = useStore();
   const [drawer, setDrawer] = useState(false);
   const [showBanner, setShowBanner] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -44,7 +44,7 @@ export default function Dashboard() {
   // --- setup steps (next step to start earning) ---
   const steps = [
     { done: !!bank, label: "Add your bank account", sub: "Needed for withdrawals", to: "/wallet" },
-    { done: plan !== "free", label: "Activate a plan", sub: "Pay once, earn forever", to: "/packages" },
+    { done: planActivated, label: "Activate a plan", sub: "Free is ₦0 — activate to earn", to: "/packages" },
     { done: socialLinked, label: "Link your socials", sub: "For sponsored posts", to: "/profile" },
   ];
   const setupDone = steps.filter((s) => s.done).length;

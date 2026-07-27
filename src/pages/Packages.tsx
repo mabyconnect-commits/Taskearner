@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Mic, Gamepad2, Megaphone, CheckCircle2, Infinity as Inf, Plus, Crown, Check, Users } from "lucide-react";
+import { Mic, Gamepad2, Megaphone, CheckCircle2, Infinity as Inf, Plus, Crown, Check, Users, Rocket } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useStore } from "@/store/useStore";
@@ -11,8 +11,11 @@ import { cn } from "@/lib/cn";
 export default function Packages() {
   const nav = useNavigate();
   const toast = useToast();
-  const { deposit, plan, activatePlan } = useStore();
+  const { deposit, plan, planActivated, activatePlan } = useStore();
   const current = planById(plan);
+  const freePlan = planById("free");
+  const freeActive = plan === "free" && planActivated;
+  const onPaid = plan !== "free";
 
   const onActivate = async (id: typeof PLANS[number]["id"]) => {
     const res = await activatePlan(id);
@@ -37,6 +40,40 @@ export default function Packages() {
       </p>
 
       <div className="space-y-5">
+        {/* Free plan — must be activated (₦0), no longer auto-on */}
+        <div className={cn("overflow-hidden rounded-4xl shadow-card", freeActive && "ring-2 ring-emerald-400")}>
+          <div className="relative bg-gradient-to-br from-ink-800 via-ink-900 to-ink-950 p-6 text-white">
+            {freeActive && (
+              <span className="absolute right-5 top-5 rounded-full bg-emerald-400 px-3 py-1 text-xs font-extrabold text-emerald-950">ACTIVE</span>
+            )}
+            <div className="flex items-center gap-2">
+              <div className="grid h-9 w-9 place-items-center rounded-xl bg-white/15"><Mic className="h-5 w-5" /></div>
+              <span className="text-lg font-bold">Free</span>
+            </div>
+            <p className="mt-3 font-display text-4xl font-extrabold">{formatNaira(0, false)}</p>
+            <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-sm font-semibold">
+              <Check className="h-4 w-4" /> No payment needed
+            </span>
+          </div>
+          <div className="bg-white p-5 dark:bg-white/[0.04]">
+            <Row icon={<Mic className="h-4 w-4" />} color="text-brand-500" amount={freePlan.perVoice} label="per Voice Earn session" />
+            <Row icon={<Gamepad2 className="h-4 w-4" />} color="text-brand-500" amount={freePlan.perWord} label="per Word Game" />
+            <Row icon={<Megaphone className="h-4 w-4" />} color="text-amber-500" amount={freePlan.perPost} label="per Sponsored Post" />
+            <Row icon={<CheckCircle2 className="h-4 w-4" />} color="text-emerald-500" amount={freePlan.perTask} label="per Task" last />
+            <div className="mt-3 flex items-center justify-between rounded-2xl bg-brand-500 px-4 py-3.5 text-slate-900 shadow-soft">
+              <p className="text-sm font-bold">Total daily earning</p>
+              <span className="font-display text-2xl font-extrabold">{formatNaira(planDailyMax(freePlan), false)}</span>
+            </div>
+            <button
+              onClick={() => onActivate("free")}
+              disabled={freeActive || onPaid}
+              className={cn("mt-4 w-full py-4 text-lg", freeActive ? "btn bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300" : "btn-primary")}
+            >
+              {freeActive ? (<><Check className="h-5 w-5" /> Active plan</>) : onPaid ? "You're on a paid plan" : (<><Rocket className="h-5 w-5" /> Activate Free</>)}
+            </button>
+          </div>
+        </div>
+
         {PLANS.map((p) => {
           const isCurrent = p.id === plan;
           const cost = p.price - (plan === "free" ? 0 : current.price);

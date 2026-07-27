@@ -3,6 +3,7 @@ import { Check, Loader2, Instagram, PlaySquare, Star, ClipboardList, Send } from
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useStore } from "@/store/useStore";
+import { ActivateGate } from "@/components/ActivateGate";
 import { planById, DAILY_TASKS, DailyTask } from "@/lib/data";
 import { api } from "@/lib/api";
 import { formatNaira } from "@/lib/format";
@@ -14,7 +15,7 @@ const iconFor = (c: string) =>
 
 export default function Tasks() {
   const toast = useToast();
-  const { plan, completedTasks, earnActivity, mode, dailyUsed } = useStore();
+  const { plan, planActivated, completedTasks, earnActivity, mode, dailyUsed } = useStore();
   const p = planById(plan);
   const taskCap = p.daily.task;
   const taskUsed = Math.min(dailyUsed?.task ?? 0, taskCap);
@@ -33,6 +34,8 @@ export default function Tasks() {
       .catch(() => { /* keep fallback */ });
     return () => { alive = false; };
   }, [mode]);
+
+  if (!planActivated) return <ActivateGate title="Daily Tasks" />;
 
   const doTask = (t: DailyTask) => {
     if (completedTasks.includes(t.id) || busy || capReached) return;

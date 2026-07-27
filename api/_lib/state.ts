@@ -16,6 +16,7 @@ export interface UserState {
   email: string;
   phone: string;
   plan: string;
+  planActivated: boolean;
   socialLinked: boolean;
   engagement: number;
   sales: number;
@@ -56,6 +57,7 @@ export function serializeUser(u: any, bank?: any, referralStats?: { pending?: nu
     email: u.email,
     phone: u.phone,
     plan: u.plan,
+    planActivated: !!u.plan_activated,
     socialLinked: u.social_linked,
     engagement: num(u.engagement),
     sales: num(u.sales),

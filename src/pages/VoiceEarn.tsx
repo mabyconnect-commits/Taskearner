@@ -6,6 +6,7 @@ import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Sheet } from "@/components/ui/Sheet";
 import { useStore } from "@/store/useStore";
+import { ActivateGate } from "@/components/ActivateGate";
 import { planById, VOICE_LANGS, VoiceLang } from "@/lib/data";
 import { formatNaira } from "@/lib/format";
 import { useSpeech, sentenceCoverage, normalize } from "@/lib/speech";
@@ -17,7 +18,7 @@ type Phase = "intro" | "reading" | "done";
 export default function VoiceEarn() {
   const nav = useNavigate();
   const toast = useToast();
-  const { plan, earnActivity } = useStore();
+  const { plan, planActivated, earnActivity } = useStore();
   const p = planById(plan);
 
   const [phase, setPhase] = useState<Phase>("intro");
@@ -39,6 +40,8 @@ export default function VoiceEarn() {
     if (phase === "reading" && coverage >= 0.7) finish();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coverage, phase]);
+
+  if (!planActivated) return <ActivateGate title="Voice Earn" />;
 
 
   const beginReading = () => {

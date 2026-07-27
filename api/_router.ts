@@ -189,7 +189,7 @@ async function earn(req: ApiRequest): Promise<ApiResponse> {
   const amount = await sql.begin(async (tx) => {
     const [u] = await tx`SELECT * FROM users WHERE id = ${uid} FOR UPDATE`;
     if (!u) throw new HttpError("User not found", 404);
-    // Free plan earns too (small daily cap) — no plan gate here anymore.
+    if (!u.plan_activated) throw new HttpError("Activate your plan to start earning", 403);
     const plan = planOf(u.plan);
 
     const now = Date.now();
@@ -281,10 +281,19 @@ async function activatePlan(req: ApiRequest): Promise<ApiResponse> {
   const uid = requireAuth(req);
   const { planId } = req.body || {};
   const target = PLANS[planId as keyof typeof PLANS];
-  if (!target || target.id === "free") return err("Invalid plan");
+  if (!target) return err("Invalid plan");
 
   const [u] = await sql`SELECT * FROM users WHERE id = ${uid}`;
   if (!u) return err("User not found", 404);
+
+  // Free activation: no cost, no commission — just switch earning on.
+  if (target.id === "free") {
+    if (u.plan !== "free") return err("You're already on a paid plan");
+    if (u.plan_activated) return err("Your Free plan is already active");
+    await sql`UPDATE users SET plan_activated = true WHERE id = ${uid}`;
+    return ok({ user: await loadState(uid), transactions: await txList(uid) });
+  }
+
   const current = planOf(u.plan);
   if (u.plan === target.id) return err("This plan is already active");
   if (u.plan !== "free" && target.price <= current.price) return err("You can only upgrade to a higher plan");
@@ -293,7 +302,7 @@ async function activatePlan(req: ApiRequest): Promise<ApiResponse> {
   if (num(u.deposit) < cost) return err("Insufficient deposit balance. Fund your wallet first.");
 
   await sql.begin(async (tx) => {
-    await tx`UPDATE users SET deposit = deposit - ${cost}, plan = ${target.id} WHERE id = ${uid}`;
+    await tx`UPDATE users SET deposit = deposit - ${cost}, plan = ${target.id}, plan_activated = true WHERE id = ${uid}`;
     await tx`
       INSERT INTO transactions (user_id, type, title, amount, wallet)
       VALUES (${uid}, 'plan', ${"Activated " + target.name + " plan"}, ${-cost}, 'deposit')`;

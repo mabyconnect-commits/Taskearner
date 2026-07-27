@@ -13,7 +13,7 @@ function todayKey() {
 
 export default function Earn() {
   const nav = useNavigate();
-  const { plan, cooldowns, dailyUsed, dailyDate } = useStore();
+  const { plan, planActivated, cooldowns, dailyUsed, dailyDate } = useStore();
   const p = planById(plan);
   const now = Date.now();
 
@@ -79,7 +79,18 @@ export default function Earn() {
     <Layout>
       <PageHeader title="Ways to Earn" subtitle="Choose an activity" to="/dashboard" />
 
-      {plan === "free" && (
+      {!planActivated ? (
+        <button
+          onClick={() => nav("/packages")}
+          className="mb-4 flex w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-brand-500 to-brand-700 p-4 text-left text-white shadow-glow"
+        >
+          <div className="flex-1">
+            <p className="font-bold">Activate a plan to start earning</p>
+            <p className="text-sm text-white/75">The Free plan is ₦0 — activate it to earn ₦120/day.</p>
+          </div>
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      ) : plan === "free" ? (
         <button
           onClick={() => nav("/packages")}
           className="mb-4 flex w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-brand-500 to-brand-700 p-4 text-left text-white shadow-glow"
@@ -90,7 +101,7 @@ export default function Earn() {
           </div>
           <ChevronRight className="h-5 w-5" />
         </button>
-      )}
+      ) : null}
 
       <div className="space-y-3">
         {activities.map((a, i) => {

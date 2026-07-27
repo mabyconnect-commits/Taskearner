@@ -6,6 +6,7 @@ import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Sheet } from "@/components/ui/Sheet";
 import { useStore } from "@/store/useStore";
+import { ActivateGate } from "@/components/ActivateGate";
 import { planById, WORD_LANGS, WordLang } from "@/lib/data";
 import { formatNaira } from "@/lib/format";
 import { useSpeech, wordMatches } from "@/lib/speech";
@@ -18,7 +19,7 @@ type Phase = "intro" | "playing" | "done";
 export default function WordGame() {
   const nav = useNavigate();
   const toast = useToast();
-  const { plan, earnActivity } = useStore();
+  const { plan, planActivated, earnActivity } = useStore();
   const p = planById(plan);
 
   const [phase, setPhase] = useState<Phase>("intro");
@@ -33,6 +34,8 @@ export default function WordGame() {
   const words = useMemo(() => [...lang.words].sort(() => Math.random() - 0.5).slice(0, ROUNDS), [lang, phase === "playing"]);
   const current = words[round];
   const { supported, listening, transcript, start, stop, reset } = useSpeech(lang.code);
+
+  if (!planActivated) return <ActivateGate title="Word Game" />;
 
 
   const beginGame = () => {

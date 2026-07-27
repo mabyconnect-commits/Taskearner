@@ -55,6 +55,7 @@ interface State {
   phone: string;
   theme: "light" | "dark";
   plan: PlanId;
+  planActivated: boolean;
   engagement: number;
   sales: number;
   deposit: number;
@@ -121,6 +122,7 @@ export const useStore = create<State>()(
           phone: user.phone,
           isAdmin: !!user.isAdmin,
           plan: user.plan as PlanId,
+          planActivated: !!user.planActivated,
           socialLinked: user.socialLinked,
           engagement: user.engagement,
           sales: user.sales,
@@ -157,6 +159,7 @@ export const useStore = create<State>()(
         phone: "",
         theme: "light",
         plan: "free",
+        planActivated: false,
         engagement: 0,
         sales: 0,
         deposit: 0,
@@ -416,6 +419,13 @@ export const useStore = create<State>()(
           const s = get();
           const plan = planById(id);
           const current = planById(s.plan);
+          // Free activation: no cost, just switch earning on.
+          if (id === "free") {
+            if (s.planActivated && s.plan === "free") return { ok: false, msg: "Your Free plan is already active." };
+            if (s.plan !== "free") return { ok: false, msg: "You're already on a paid plan." };
+            set({ planActivated: true });
+            return { ok: true, msg: "Free plan activated — start earning ₦120/day!" };
+          }
           if (id === s.plan) return { ok: false, msg: "This plan is already active." };
           if (plan.price <= current.price && s.plan !== "free") return { ok: false, msg: "You can only upgrade to a higher plan." };
           const cost = plan.price - (s.plan === "free" ? 0 : current.price);
@@ -423,6 +433,7 @@ export const useStore = create<State>()(
           set((st) => ({
             deposit: st.deposit - cost,
             plan: id,
+            planActivated: true,
             transactions: [tx("plan", `Activated ${plan.name} plan`, -cost, "deposit"), ...st.transactions].slice(0, 60),
           }));
           return { ok: true, msg: `${plan.name} activated. Pay once, earn forever!` };

@@ -5,6 +5,7 @@ import { Copy, Check, Share2, Loader2, Megaphone, X, Download, ImagePlus } from 
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useStore } from "@/store/useStore";
+import { ActivateGate } from "@/components/ActivateGate";
 import { planById, SPONSORED_POSTS, SponsoredPost, SALES_WITHDRAW_MIN } from "@/lib/data";
 import { api } from "@/lib/api";
 import { formatNaira } from "@/lib/format";
@@ -17,7 +18,7 @@ const PLATFORMS = ["WhatsApp", "Facebook", "X", "Instagram", "TikTok"] as const;
 export default function Sponsored() {
   const nav = useNavigate();
   const toast = useToast();
-  const { plan, socialLinked, earnActivity, completedPosts, mode, deposit, advertisePost, dailyUsed } = useStore();
+  const { plan, planActivated, socialLinked, earnActivity, completedPosts, mode, deposit, advertisePost, dailyUsed } = useStore();
   const p = planById(plan);
   const postCap = p.daily.post;
   const postCapReached = (dailyUsed?.post ?? 0) >= postCap;
@@ -36,6 +37,7 @@ export default function Sponsored() {
     return () => { alive = false; };
   }, [mode]);
 
+  if (!planActivated) return <ActivateGate title="Sponsored Posts" />;
 
   const copy = (post: SponsoredPost) => {
     navigator.clipboard?.writeText(post.copy).catch(() => {});

@@ -68,6 +68,7 @@ export interface ServerUser {
   email: string;
   phone: string;
   plan: string;
+  planActivated: boolean;
   socialLinked: boolean;
   engagement: number;
   sales: number;

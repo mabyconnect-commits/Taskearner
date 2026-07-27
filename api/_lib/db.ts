@@ -138,6 +138,11 @@ export async function ensureSchema(): Promise<void> {
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily jsonb NOT NULL DEFAULT '{}'::jsonb`;
     // Referral wallet: available (withdrawable) balance of confirmed ₦250 bonuses.
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS referral numeric(14,2) NOT NULL DEFAULT 0`;
+    // Whether the user has explicitly activated a plan (Free must be activated
+    // too, not auto-on). Backfill: anyone on a paid plan or with existing
+    // activity is already considered activated so they aren't interrupted.
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_activated boolean NOT NULL DEFAULT false`;
+    await sql`UPDATE users SET plan_activated = true WHERE plan_activated = false AND (plan <> 'free' OR engagement > 0 OR sales > 0 OR referral > 0)`;
     // Per-referral ₦250 signup bonus + its state ('pending' → 'available').
     await sql`ALTER TABLE referrals ADD COLUMN IF NOT EXISTS bonus numeric(14,2) NOT NULL DEFAULT 0`;
     await sql`ALTER TABLE referrals ADD COLUMN IF NOT EXISTS bonus_status text NOT NULL DEFAULT 'pending'`;
