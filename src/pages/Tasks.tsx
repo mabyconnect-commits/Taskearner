@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Check, Loader2, Instagram, PlaySquare, Star, ClipboardList, Send } from "lucide-react";
+import { Check, Loader2, Instagram, PlaySquare, Star, ClipboardList, Send, ShieldCheck } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Sheet } from "@/components/ui/Sheet";
 import { useStore } from "@/store/useStore";
 import { ActivateGate } from "@/components/ActivateGate";
 import { planById, DAILY_TASKS, DailyTask } from "@/lib/data";
@@ -9,6 +10,8 @@ import { api } from "@/lib/api";
 import { formatNaira } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
+
+type Result = { ok: boolean; msg: string; amount?: number };
 
 const iconFor = (c: string) =>
   c === "social" ? Instagram : c === "watch" ? PlaySquare : c === "review" ? Star : c === "survey" ? ClipboardList : Send;
@@ -20,8 +23,7 @@ export default function Tasks() {
   const taskCap = p.daily.task;
   const taskUsed = Math.min(dailyUsed?.task ?? 0, taskCap);
   const capReached = taskUsed >= taskCap;
-  const [busy, setBusy] = useState<string | null>(null);
-  const [armed, setArmed] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState<DailyTask | null>(null);
   const [tab, setTab] = useState<"available" | "completed">("available");
   // Live tasks from the DB (admin-managed); fall back to bundled list offline.
   const [tasks, setTasks] = useState<DailyTask[]>(DAILY_TASKS);
@@ -37,27 +39,19 @@ export default function Tasks() {
 
   if (!planActivated) return <ActivateGate title="Daily Tasks" />;
 
+  // Tapping opens the task's link (if any) and launches the verification sheet:
+  // a short countdown, then a quick math check, then the reward is claimed.
   const doTask = (t: DailyTask) => {
-    if (completedTasks.includes(t.id) || busy || capReached) return;
+    if (completedTasks.includes(t.id) || verifying || capReached) return;
     const link = (t.link || "").trim();
+    if (link) window.open(link, "_blank", "noopener,noreferrer");
+    setVerifying(t);
+  };
 
-    // If the task has a link, the FIRST tap opens it (Telegram, Instagram, the
-    // survey, etc.). The user completes it there, comes back, and taps again to
-    // claim. Without this, tapping used to silently credit and never open it.
-    if (link && armed !== t.id) {
-      window.open(link, "_blank", "noopener,noreferrer");
-      setArmed(t.id);
-      toast("Complete the task, then tap “Claim reward”.", "info");
-      return;
-    }
-
-    setBusy(t.id);
-    setTimeout(async () => {
-      const res = await earnActivity("task", t.id);
-      setBusy(null);
-      setArmed(null);
-      toast(res.ok ? `Task done! +${formatNaira(res.amount ?? p.perTask)}` : res.msg, res.ok ? "success" : "error");
-    }, link ? 400 : 1200);
+  const verifyReward = async (t: DailyTask): Promise<Result> => {
+    const res = await earnActivity("task", t.id);
+    toast(res.ok ? `Task done! +${formatNaira(res.amount ?? p.perTask)}` : res.msg, res.ok ? "success" : "error");
+    return res;
   };
 
   const done = completedTasks.filter((id) => tasks.some((t) => t.id === id)).length;
@@ -142,22 +136,130 @@ export default function Tasks() {
               ) : (
                 <button
                   onClick={() => doTask(t)}
-                  disabled={!!busy}
-                  className={cn(
-                    "shrink-0 px-4 py-2.5 text-sm",
-                    armed === t.id ? "btn bg-emerald-500 text-white" : "btn-primary",
-                  )}
+                  className="btn-primary shrink-0 px-4 py-2.5 text-sm"
                 >
-                  {busy === t.id ? <Loader2 className="h-4 w-4 animate-spin" />
-                    : armed === t.id ? "Claim reward"
-                    : (t.link || "").trim() ? "Start task" : "Do it"}
+                  {(t.link || "").trim() ? "Start task" : "Do it"}
                 </button>
               )}
             </div>
           );
         })}
       </div>
+
+      <TaskVerifySheet
+        task={verifying}
+        reward={p.perTask}
+        onClose={() => setVerifying(null)}
+        onVerify={verifyReward}
+      />
     </Layout>
+  );
+}
+
+// Slick task verification: a short countdown while the user does the task, then
+// a quick anti-bot math check. Answering correctly claims the reward.
+function TaskVerifySheet({
+  task,
+  reward,
+  onClose,
+  onVerify,
+}: {
+  task: DailyTask | null;
+  reward: number;
+  onClose: () => void;
+  onVerify: (t: DailyTask) => Promise<Result>;
+}) {
+  const WAIT = 8; // seconds
+  const [secs, setSecs] = useState(WAIT);
+  const [phase, setPhase] = useState<"wait" | "quiz">("wait");
+  const [q, setQ] = useState({ a: 0, b: 0 });
+  const [val, setVal] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  // Reset every time a task opens.
+  useEffect(() => {
+    if (!task) return;
+    setSecs(WAIT);
+    setPhase("wait");
+    setVal("");
+    setErr("");
+    setQ({ a: Math.floor(Math.random() * 8) + 2, b: Math.floor(Math.random() * 8) + 2 });
+  }, [task]);
+
+  // Countdown tick.
+  useEffect(() => {
+    if (!task || phase !== "wait") return;
+    if (secs <= 0) { setPhase("quiz"); return; }
+    const id = setTimeout(() => setSecs((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [task, phase, secs]);
+
+  const submit = async () => {
+    if (Number(val) !== q.a + q.b) {
+      setErr("That's not correct — try again.");
+      setVal("");
+      return;
+    }
+    setBusy(true);
+    const res = await onVerify(task!);
+    setBusy(false);
+    if (res.ok) onClose();
+    else setErr(res.msg || "Could not verify. Try again.");
+  };
+
+  const pct = (WAIT - secs) / WAIT;
+  const R = 44;
+
+  return (
+    <Sheet open={!!task} onClose={busy ? () => {} : onClose} title="Verify your task">
+      {task && (
+        <div className="text-center">
+          {phase === "wait" ? (
+            <>
+              <div className="relative mx-auto grid h-28 w-28 place-items-center">
+                <svg className="absolute h-28 w-28 -rotate-90" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r={R} className="fill-none stroke-slate-100 dark:stroke-white/10" strokeWidth="8" />
+                  <circle
+                    cx="50" cy="50" r={R}
+                    className="fill-none stroke-brand-500 transition-all duration-1000 ease-linear"
+                    strokeWidth="8" strokeLinecap="round"
+                    strokeDasharray={2 * Math.PI * R}
+                    strokeDashoffset={2 * Math.PI * R * (1 - pct)}
+                  />
+                </svg>
+                <span className="font-display text-4xl font-extrabold">{secs}</span>
+              </div>
+              <p className="mt-4 font-display text-lg font-bold">Complete the task…</p>
+              <p className="mx-auto mt-1 max-w-xs text-sm text-slate-500 dark:text-slate-400">
+                Finish “{task.title}”{(task.link || "").trim() ? " in the tab that opened" : ""}. A quick check unlocks in a moment.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-brand-100 dark:bg-brand-500/20">
+                <ShieldCheck className="h-8 w-8 text-brand-600 dark:text-brand-300" />
+              </div>
+              <p className="mt-4 font-display text-lg font-bold">Quick check to claim {formatNaira(reward, false)}</p>
+              <p className="mt-3 font-display text-3xl font-extrabold">{q.a} + {q.b} = ?</p>
+              <input
+                autoFocus
+                value={val}
+                onChange={(e) => { setVal(e.target.value.replace(/\D/g, "")); setErr(""); }}
+                onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+                inputMode="numeric"
+                placeholder="Your answer"
+                className="input mx-auto mt-4 max-w-[200px] text-center text-2xl font-bold"
+              />
+              {err && <p className="mt-2 text-sm font-semibold text-rose-500">{err}</p>}
+              <button onClick={submit} disabled={busy || !val} className="btn-primary mt-4 w-full py-4 text-lg disabled:opacity-60">
+                {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Check className="h-5 w-5" /> Verify &amp; claim</>}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </Sheet>
   );
 }
 
