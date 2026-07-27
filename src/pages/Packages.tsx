@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Mic, Gamepad2, Megaphone, CheckCircle2, Infinity as Inf, Plus, Crown, Check, Users, Rocket } from "lucide-react";
+import { Mic, Gamepad2, Megaphone, CheckCircle2, Infinity as Inf, Plus, Crown, Check, Users, Rocket, ShieldCheck } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useStore } from "@/store/useStore";
@@ -100,9 +100,14 @@ export default function Packages() {
                   <span className="text-lg font-bold">{p.name}</span>
                 </div>
                 <p className="mt-3 font-display text-4xl font-extrabold">{formatNaira(p.price, false)}</p>
-                <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-sm font-semibold">
-                  <Inf className="h-4 w-4" /> Lifetime access
-                </span>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-sm font-semibold">
+                    <Inf className="h-4 w-4" /> Lifetime access
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-500/25 px-3 py-1 text-sm font-semibold text-brand-300">
+                    <ShieldCheck className="h-4 w-4" /> Trust {p.trustScore}
+                  </span>
+                </div>
               </div>
 
               {/* body */}

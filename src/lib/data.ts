@@ -20,12 +20,24 @@ export interface Plan {
   perTask: number;
   daily: DailyCaps;
   minWithdraw: number; // engagement-wallet minimum withdrawal for this plan
+  trustScore: number; // 0 on Free; rises with each paid plan
   tagline: string;
   popular?: boolean;
 }
 
 export function planDailyMax(p: Plan): number {
   return p.daily.voice * p.perVoice + p.daily.word * p.perWord * WORD_ROUNDS + p.daily.task * p.perTask + p.daily.post * p.perPost;
+}
+
+// Trust tier for a given score (Free = 0 → Legend at 500).
+export const TRUST_MAX = 500;
+export function trustTier(score: number): { label: string; note: string } {
+  if (score >= 500) return { label: "Legend", note: "Top tier reached — you're a Legend!" };
+  if (score >= 400) return { label: "Elite", note: "Elite trust — nearly at the top." };
+  if (score >= 250) return { label: "Pro", note: "Strong, trusted earner." };
+  if (score >= 100) return { label: "Trusted", note: "You're a trusted member." };
+  if (score >= 30) return { label: "Verified", note: "Verified — keep climbing." };
+  return { label: "New", note: "Activate a paid plan to build trust." };
 }
 
 export const PLANS: Plan[] = [
@@ -40,6 +52,7 @@ export const PLANS: Plan[] = [
     perTask: 30,
     daily: { voice: 1, word: 1, task: 1, post: 1 },
     minWithdraw: 8000,
+    trustScore: 30,
     tagline: "Dip your toes in and start earning.",
   },
   {
@@ -53,6 +66,7 @@ export const PLANS: Plan[] = [
     perTask: 60,
     daily: { voice: 1, word: 1, task: 1, post: 1 },
     minWithdraw: 14500,
+    trustScore: 100,
     tagline: "A solid step up for daily earners.",
   },
   {
@@ -66,6 +80,7 @@ export const PLANS: Plan[] = [
     perTask: 100,
     daily: { voice: 1, word: 1, task: 1, post: 1 },
     minWithdraw: 22000,
+    trustScore: 250,
     tagline: "For creators who show up every day.",
     popular: true,
   },
@@ -80,6 +95,7 @@ export const PLANS: Plan[] = [
     perTask: 130,
     daily: { voice: 1, word: 1, task: 1, post: 1 },
     minWithdraw: 34000,
+    trustScore: 400,
     tagline: "Premium rates, faster payouts.",
   },
   {
@@ -93,6 +109,7 @@ export const PLANS: Plan[] = [
     perTask: 150,
     daily: { voice: 1, word: 1, task: 1, post: 1 },
     minWithdraw: 45000,
+    trustScore: 500,
     tagline: "The highest earning tier. Pay once, earn forever.",
   },
 ];
@@ -108,6 +125,7 @@ export const FREE_PLAN: Plan = {
   perTask: 25,
   daily: { voice: 1, word: 1, task: 1, post: 1 },
   minWithdraw: 8000,
+  trustScore: 0,
   tagline: "Earn ₦120 daily free — upgrade to earn more.",
 };
 

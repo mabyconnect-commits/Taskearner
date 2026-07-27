@@ -2,11 +2,11 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Menu, Bell, Smartphone, Wifi, Zap, Tv, Crown, X, Mic, Gamepad2, CheckCircle2, Megaphone,
-  ArrowRight, Share2, Copy, Check, ArrowUp, Users, TrendingUp, Lock, Trophy, Rocket, ChevronRight, MonitorSmartphone,
+  ArrowRight, Share2, Copy, Check, ArrowUp, Users, TrendingUp, Lock, Trophy, Rocket, ChevronRight, MonitorSmartphone, ShieldCheck,
 } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { greeting, formatNaira } from "@/lib/format";
-import { planById } from "@/lib/data";
+import { planById, trustTier, TRUST_MAX } from "@/lib/data";
 import { Layout } from "@/components/Layout";
 import { Drawer } from "@/components/Drawer";
 import { WalletCards } from "@/components/WalletCards";
@@ -115,6 +115,34 @@ export default function Dashboard() {
       <div className="mt-5">
         <WalletCards />
       </div>
+
+      {/* trust score */}
+      {(() => {
+        const score = planById(plan).trustScore;
+        const tier = trustTier(score);
+        return (
+          <div className="card mt-4 p-5">
+            <div className="flex items-center gap-3">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-brand-500 text-slate-900">
+                <ShieldCheck className="h-6 w-6" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-slate-400">Trust Score</p>
+                <p className="font-display text-3xl font-extrabold leading-none">{score}</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-brand-100 px-3 py-1 text-xs font-extrabold uppercase text-brand-700 dark:bg-brand-500/20 dark:text-brand-200">
+                {tier.label}
+              </span>
+            </div>
+            <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
+              <div className="h-full rounded-full bg-gradient-to-r from-brand-400 to-emerald-500 transition-all" style={{ width: `${Math.max(4, (score / TRUST_MAX) * 100)}%` }} />
+            </div>
+            <button onClick={() => nav("/packages")} className="mt-2 text-left text-sm text-slate-400">
+              {tier.note}{score < TRUST_MAX && <span className="font-bold text-brand-600 dark:text-brand-300"> Upgrade →</span>}
+            </button>
+          </div>
+        );
+      })()}
 
       {/* quick actions arc */}
       <div className="mt-8">
